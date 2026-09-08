@@ -35,6 +35,9 @@ import threading
 if getattr(sys, "frozen", False):
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = os.path.join(sys._MEIPASS, "ms-playwright")
 
+PORT = 8721
+VERSION = "1.9"
+
 
 def main():
     # Lazy imports: webview e server sono i moduli piu' pesanti (pywebview
@@ -44,9 +47,6 @@ def main():
     # caricare la catena completa di import - ritardabile finche' non serve.
     import webview
     from driftdraft.server import run_server
-
-    PORT = 8721
-    VERSION = "1.9"
 
     thread = threading.Thread(
         target=run_server, kwargs={"port": PORT}, daemon=True
