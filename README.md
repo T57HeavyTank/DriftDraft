@@ -35,6 +35,7 @@ come azioni sulla draft, con supporto alla fearless draft.
 
 # Qualche esempio:
 <img src="docs/3-training_pre-select.png" alt="Scelta della squadra avversaria" width="420">
+
 ![Modalità training contro una squadra pro](docs/2-training.png)
 ![Roster e tier list per giocatore](docs/4-team_esempio_tierlist.png)
 
