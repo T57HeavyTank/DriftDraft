@@ -1,0 +1,6 @@
+bottle
+openpyxl
+playwright
+pywebview
+pillow
+numpy

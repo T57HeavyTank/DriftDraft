@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>DriftDraft</title>
+<link rel="stylesheet" href="/web/style.css">
+</head>
+<body>
+<!-- Lo sfondo "nebulosa" animato che stava qui (tre <div>: #app-bg,
+     #app-bg-nebula, #app-bg-vignette) e' stato RIMOSSO il 2026-09-05 con
+     l'adozione del tema neumorphism, insieme al suo CSS e all'immagine
+     web/img/nebula-bg.jpg. Non e' una bocciatura di quel lavoro: il
+     neumorphism presuppone per costruzione una superficie omogenea da cui
+     la luce scolpisce le forme, e sopra una fotografia le ombre leggono
+     come sporco invece che come rilievo - le due cose non possono
+     coesistere. Rimosso e non solo nascosto su richiesta esplicita
+     dell'utente ("lasciando completamente indietro la vecchia [grafica],
+     in modo anche da non appesantire l'app con vecchi dati inutilizzati").
+
+     L'immagine era generata dall'utente stessa con Gemini
+     ("Drift-Draft Background.jpg", originale 5632x3072 sul suo Desktop in
+     C:\Users\Tank\Desktop\Fonts\, poi ritagliata 16:9 ed esportata a
+     3200x1800): recuperabile da li' o dai backup del sorgente, se un
+     giorno dovesse tornare utile. Storia completa delle tre versioni
+     dello sfondo (rumore procedurale -> foto Hubble CC BY 4.0 -> immagine
+     propria) nella memoria di progetto. -->
+<div id="app">
+  <div id="sidebar">
+    <div class="panel">
+      <div class="panel-title-row">
+        <h2>Blue Side</h2>
+        <!-- Interruttore tema chiaro/scuro. Sta QUI, in fondo alla riga del
+             titolo di Blue Side, per fare da specchio allo slider della
+             larghezza pannelli che occupa la stessa posizione su Red Side
+             (richiesta esplicita dell'utente 2026-09-05). E' un .icon-btn
+             come gli altri della UI; l'icona la scrive app.js e cambia col
+             tema attivo (vedi setupThemeToggle). -->
+        <button type="button" id="theme-toggle" class="icon-btn" title="Passa al tema chiaro"></button>
+      </div>
+      <div class="panel-body">
+        <div class="pool-import">
+          <input type="text" id="pool-url-left" placeholder="Link op.gg multisearch...">
+          <button id="pool-refresh-left">Aggiorna</button>
+        </div>
+        <div id="pool-chip-left"></div>
+        <div id="team-slots"></div>
+        <div class="ban-slots-label">Ban</div>
+        <div class="ban-row">
+          <div id="ban-slots" class="ban-slots"></div>
+          <button type="button" id="save-draft-open-left" class="icon-btn save-draft-open save-draft-open-left" disabled title="Servono 5 campioni piazzati per salvare questa comp">📖</button>
+        </div>
+        <div id="fearless-pool-left" class="fearless-pool hidden">
+          <div class="fearless-pool-label">Usati in serie</div>
+          <div class="fearless-pool-icons"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Comp rilevate</h2>
+      <div class="panel-body">
+        <div id="comp-status"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title-row">
+        <h2>Counter naturali</h2>
+        <label class="toggle-switch" title="Mostra/nascondi (solo un aiuto per neofiti)">
+          <input type="checkbox" id="counter-diagram-toggle" checked>
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        </label>
+      </div>
+      <div class="panel-body" id="counter-diagram-body">
+        <div id="counter-diagram"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- "Da che lato giochi": chiesto quando si sceglie un team in modalita'
+       libera, DOPO che il caricamento e' finito - un dialogo che spunta
+       mentre gira ancora la rotella si prende un click a vuoto. Stessa
+       struttura del velo "modifiche non salvate" del roster. -->
+  <div id="side-picker" class="side-picker hidden">
+    <div class="side-picker-box">
+      <p id="side-picker-text"></p>
+      <div class="side-picker-buttons">
+        <button type="button" id="side-picker-blue">Blue Side</button>
+        <button type="button" id="side-picker-red">Red Side</button>
+      </div>
+      <button type="button" id="side-picker-skip">Decido dopo</button>
+    </div>
+  </div>
+
+  <!-- Prima configurazione: le immagini dei campioni non viaggiano piu' nel
+       pacchetto (vedi driftdraft/champion_art.py), quindi al primo avvio
+       vanno scaricate. Copre tutto perche' senza icone la griglia non ha
+       niente da mostrare. -->
+  <div id="art-setup" class="art-setup hidden">
+    <div class="art-setup-box">
+      <h2>Prima configurazione</h2>
+      <p id="art-setup-text">
+        Scarico le immagini dei campioni da Data Dragon.<br>
+        Si fa una volta sola: restano sul tuo computer.
+      </p>
+      <div class="art-setup-bar"><div id="art-setup-fill"></div></div>
+      <p class="art-setup-count" id="art-setup-count"></p>
+      <!-- "Continua senza immagini" e' SEMPRE disponibile, anche mentre
+           scarica: su una connessione lenta restare bloccati davanti a una
+           barra senza via d'uscita e' peggio di un'app senza icone, che
+           funziona lo stesso (tag, comp, suggerimenti e bot non dipendono
+           dalle immagini). "Riprova" invece compare solo se qualcosa e'
+           andato storto. -->
+      <div class="art-setup-buttons" id="art-setup-buttons">
+        <button type="button" id="art-setup-retry" class="hidden">Riprova</button>
+        <button type="button" id="art-setup-skip">Continua senza immagini</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="context-bar">
+      <button id="roster-open" class="icon-btn" title="Modifica il tuo team">⚙</button>
+      <select id="context-team-select">
+        <option value="">Nessun team selezionato</option>
+      </select>
+      <button type="button" id="context-team-opgg-refresh" class="icon-btn" title="Ricarica la pool op.gg dei titolari del roster (clicca poi il tag di un giocatore per vederla)">🔄</button>
+      <span id="context-team-opgg-status"></span>
+      <!-- Solo in modalita' libera: li' il lato non e' ricavabile da nessuna
+           parte (in allenamento e' quello del trainee, in torneo quello
+           connesso) e va chiesto. Cliccabile per cambiarlo senza dover
+           riselezionare il team. -->
+      <button type="button" id="context-side-chip" class="context-side-chip hidden"></button>
+      <div id="context-player-filters"></div>
+      <input type="range" id="icon-size-slider" min="1" max="2" step="0.05" value="2" title="Dimensione icone griglia">
+      <button id="saved-drafts-open" title="Vedi le draft salvate">📋 Draft salvate</button>
+      <button id="training-mode-open" title="Allenati contro un bot che sceglie in base a sinergia/counter osservati in draft pro recenti">🎯 Modalità training</button>
+      <button id="tournament-mode-open" title="Connetti DriftDraft a una draft live su drafter.lol">🏆 Modalità torneo</button>
+    </div>
+
+    <div id="context-tier-filters" class="hidden"></div>
+
+    <div id="tournament-status" class="hidden">
+      <!-- Riempimento del timer: una striscia che occupa TUTTA la barra di
+           stato e si svuota col passare dei secondi (richiesta dell'utente
+           2026-09-05: il numerino accanto alla fase "è piccolino e si nota
+           veramente poco"). Primo figlio e in position:absolute, quindi sta
+           dietro a testo e bottoni senza spostarli di un pixel. -->
+      <div id="tournament-timer-bar"></div>
+      <span id="tournament-step"></span>
+      <span id="tournament-timer"></span>
+      <button id="tournament-next-game" title="Disconnette e si ricollega alla game successiva della stessa serie (stesso link, numero game incrementato) - dovrai riscegliere Blue/Red Side">Prossima draft →</button>
+      <button id="tournament-disconnect">Disconnetti</button>
+    </div>
+    <div id="training-status" class="hidden">
+      <span id="training-step"></span>
+      <span id="training-info"></span>
+      <button id="training-stop">Termina allenamento</button>
+    </div>
+    <div id="toolbar">
+      <input id="search" type="text" placeholder="Cerca campione...">
+      <div id="role-filters"></div>
+      <div id="counter-mode-controls">
+        <!-- Chip acceso/spento invece dell'interruttore mobile che c'era
+             prima (2026-09-05): "avrebbe più senso poterlo direttamente
+             cliccare tipo gli altri tag on-off piuttosto che lo slide che
+             non si capisce se effettivamente è usato oppure no". Acceso =
+             premuto dentro il materiale, come ogni altro filtro attivo di
+             questa toolbar. -->
+        <button type="button" id="lane-counter-toggle" class="toggle-chip" title="Usa i counter di corsia (differenza oro a 15 minuti, da u.gg) invece del winrate generale (lolalytics)">Counter corsia</button>
+        <div id="counter-tier-toggle" title="Fascia elo per la ricerca counter"></div>
+      </div>
+      <button id="reset-filters" title="Annulla tutti i filtri attivi (ricerca, comp, tag, ruolo, pool, giocatore, counter)">✕ Annulla tag</button>
+    </div>
+    <div id="champion-grid"></div>
+
+    <!-- Pannello "Pick suggeriti" (2026-09-05). Prima l'unico segnale era la
+         tintura oro delle icone in griglia: resta (l'utente vuole tenere
+         entrambi per confrontarli all'uso), ma da qui i suggerimenti si
+         leggono in ORDINE DI PUNTEGGIO e, soprattutto, non spariscono piu'
+         quando un filtro/tag nasconde quella card dalla griglia. Sta sotto la
+         griglia e sopra il bottone di conferma della modalita' torneo,
+         posizione richiesta esplicitamente. -->
+    <div id="suggestions-panel">
+      <div id="suggestions-panel-head">
+        <label id="suggestions-toggle-label" class="toggle-switch-labeled" title="Evidenzia i campioni con più sinergia/counter nei dati dei match pro recenti, in base ai pick già fatti (in qualunque modalità) - solo un suggerimento, la scelta resta tua">
+          <span class="toggle-switch">
+            <input type="checkbox" id="suggestions-toggle">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </span>
+          <span>Pick suggeriti</span>
+        </label>
+        <!-- Compare solo quando la pool op.gg di almeno un lato e'
+             stata caricata (vedi renderSuggestionsPanel): acceso, ogni riga
+             mostra solo campioni che quel lato gioca davvero. -->
+        <button type="button" id="pool-filter" class="toggle-chip hidden" title="Restringi i suggerimenti di ogni lato ai soli campioni presenti nella pool op.gg caricata per quel lato">Solo pool op.gg</button>
+        <span id="suggestions-data-info"></span>
+        <button type="button" id="suggestions-sync" title="Riscarica le draft pro recenti da Leaguepedia: sono i dati su cui si basano sinergia, counter e corsia suggerita">Aggiorna dati</button>
+      </div>
+      <!-- Una riga per LATO (2026-09-06). Erano "Per noi" e "Per loro", ma
+           fuori da torneo/training il tool il lato nostro lo INDOVINAVA
+           dall'ultimo slot cliccato, e le due righe si scambiavano di
+           significato senza dirlo. L'utente ci si e' imbattuto con Ambessa:
+           "una nota risposta di Ambessa e' Renekton, tuttavia il tool non sa
+           effettivamente chi e' per noi e per loro... propongo blueside e
+           redside". Blu e rosso non sono un'ipotesi: sono dove stanno i
+           campioni, e combaciano coi due pannelli laterali.
+           Un campione presente in tutte e due le righe e' conteso, e in
+           entrambe porta la cornice mezza blu e mezza rossa. -->
+      <div class="suggestions-row" id="suggestions-row-blue">
+        <span class="suggestions-row-label" title="I campioni che conviene prendere al BLUE SIDE: sinergia con i pick blu, counter contro quelli rossi">Blue Side</span>
+        <div class="suggestions-row-list" id="suggestions-blue-list"></div>
+      </div>
+      <div class="suggestions-row" id="suggestions-row-red">
+        <span class="suggestions-row-label" title="I campioni che conviene prendere al RED SIDE: sinergia con i pick rossi, counter contro quelli blu">Red Side</span>
+        <div class="suggestions-row-list" id="suggestions-red-list"></div>
+      </div>
+    </div>
+
+    <div id="tournament-confirm-row" class="hidden">
+      <button id="tournament-confirm" disabled>Conferma selezione</button>
+    </div>
+    <div id="tournament-roles-row">
+      <div id="tournament-own-roles" class="hidden">
+        <div class="training-role-team">
+          <h4>Ruoli nostri (trascina per correggere)</h4>
+          <div class="training-role-rows"></div>
+        </div>
+      </div>
+      <div id="tournament-enemy-roles" class="hidden">
+        <div class="training-role-team">
+          <h4>Ruoli nemici (trascina per correggere)</h4>
+          <div class="training-role-rows"></div>
+        </div>
+      </div>
+    </div>
+    <div id="tournament-evaluate-row" class="hidden">
+      <button id="tournament-evaluate" disabled>Valuta la draft</button>
+    </div>
+    <div id="tournament-evaluation" class="hidden"></div>
+    <div id="training-confirm-row" class="hidden">
+      <button id="training-confirm" disabled>Conferma selezione</button>
+    </div>
+    <div id="training-role-summary" class="hidden">
+      <div class="training-role-team" id="training-role-blue">
+        <h4>Blue</h4>
+        <div class="training-role-rows"></div>
+      </div>
+      <div class="training-role-team" id="training-role-red">
+        <h4>Red</h4>
+        <div class="training-role-rows"></div>
+      </div>
+    </div>
+    <div id="training-evaluation" class="hidden"></div>
+    <div id="role-confirm-panel" class="hidden">
+      <div id="role-confirm-header">Conferma ruoli — trascina i pick per riordinarli, poi conferma</div>
+      <div id="role-confirm-slots"></div>
+      <button id="role-confirm-button">Conferma ruoli</button>
+      <div id="role-confirm-status"></div>
+    </div>
+  </div>
+
+  <div id="sidebar-right">
+    <div class="panel">
+      <div class="panel-title-row">
+        <h2>Red Side</h2>
+        <input type="range" id="sidebar-size-slider" min="1" max="2" step="0.05" value="1.2" title="Larghezza pannelli laterali">
+      </div>
+      <div class="panel-body">
+        <div class="pool-import">
+          <input type="text" id="pool-url-right" placeholder="Link op.gg multisearch...">
+          <button id="pool-refresh-right">Aggiorna</button>
+        </div>
+        <div id="pool-chip-right"></div>
+        <div id="team-slots-2"></div>
+        <div class="ban-slots-label">Ban</div>
+        <div class="ban-row">
+          <button type="button" id="save-draft-open-right" class="icon-btn save-draft-open save-draft-open-right" disabled title="Servono 5 campioni piazzati per salvare questa comp">📖</button>
+          <div id="ban-slots-2" class="ban-slots"></div>
+        </div>
+        <div id="fearless-pool-right" class="fearless-pool hidden">
+          <div class="fearless-pool-label">Usati in serie</div>
+          <div class="fearless-pool-icons"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Comp rilevate</h2>
+      <div class="panel-body">
+        <div id="comp-status-2"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title-row">
+        <h2>Bordi comp</h2>
+        <div class="panel-title-row-controls">
+          <label class="toggle-switch" title="Mostra/nascondi il bordo colorato per comp sulle icone campione, in tutte le modalità">
+            <input type="checkbox" id="comp-borders-toggle" checked>
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </label>
+          <button id="edit-tags-open" title="Modifica comp/tag/ruoli di un campione senza dover usare Excel">🏷️ Modifica tag</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- position:fixed, posizionati via JS in base al bottone cliccato (vedi
+     setupSaveDraftPopovers in app.js) - dichiarati QUI, fuori da #sidebar/
+     #sidebar-right, apposta: quei contenitori hanno overflow-y:auto (che in
+     CSS forza overflow-x:auto anche se non dichiarato), quindi un discendente
+     assoluto li' dentro veniva tagliato/troncato invece di poter "uscire"
+     sopra il resto della pagina - bug reale segnalato dall'utente 2026-08-26. -->
+<div id="save-draft-popover-left" class="save-draft-popover hidden">
+  <input type="text" id="save-draft-name-left" placeholder="Nome (opzionale)...">
+  <button type="button" id="save-draft-confirm-left">Salva</button>
+</div>
+<div id="save-draft-popover-right" class="save-draft-popover hidden">
+  <input type="text" id="save-draft-name-right" placeholder="Nome (opzionale)...">
+  <button type="button" id="save-draft-confirm-right">Salva</button>
+</div>
+
+<div id="roster-modal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Modifica il tuo team</h2>
+      <button id="roster-close" class="icon-btn">✕</button>
+    </div>
+
+    <!-- Menu costruito a mano al posto di <input list=datalist> (2026-09-06).
+         Il datalist nativo e' un AUTOCOMPLETE: filtra sempre sul testo gia'
+         presente nel campo, quindi con un nome scritto mostrava solo i
+         profili che gli somigliavano - da cui la discrepanza segnalata
+         dall'utente fra click al centro (elenco filtrato) e click sulla
+         freccia (elenco intero, perche' li' il campo veniva svuotato prima
+         di aprire). Qui il campo RINOMINA e basta, la freccia SCEGLIE e
+         basta, e l'elenco e' sempre completo. -->
+    <div class="row-with-buttons">
+      <div class="combo" id="roster-profile-picker">
+        <input type="text" id="roster-profile-combo" placeholder="Nome del team..." autocomplete="off">
+        <button type="button" class="combo-arrow" title="Mostra tutti i team salvati">▼</button>
+        <div class="combo-list hidden"></div>
+      </div>
+      <button id="roster-profile-new">Nuovo</button>
+      <button id="roster-profile-save">Salva</button>
+      <button id="roster-profile-delete">Elimina</button>
+    </div>
+
+    <div id="roster-role-tabs"></div>
+
+    <div class="row-with-buttons">
+      <div class="combo" id="roster-player-picker">
+        <input type="text" id="roster-player-combo" placeholder="Nome giocatore... (usa 'sub - Nome' per un sostituto)" autocomplete="off">
+        <button type="button" class="combo-arrow" title="Mostra tutti i giocatori di questo ruolo">▼</button>
+        <div class="combo-list hidden"></div>
+      </div>
+      <input type="text" id="roster-player-riotid" placeholder="Riot ID (Nome#TAG)...">
+      <button id="roster-player-new">Nuovo</button>
+      <button id="roster-player-delete">Elimina</button>
+    </div>
+
+    <div class="row-with-buttons">
+      <button id="roster-tierlist-import">📷 Importa tierlist da screenshot</button>
+      <span id="roster-tierlist-status"></span>
+      <img id="roster-tierlist-preview">
+    </div>
+    <input type="file" id="roster-tierlist-file" accept="image/*">
+
+    <div id="roster-tier-rows"></div>
+
+    <div class="row-with-buttons">
+      <input type="text" id="roster-search" placeholder="Cerca campione...">
+      <label class="role-filter-toggle"><input type="checkbox" id="roster-role-filter-toggle" checked> Solo ruolo</label>
+    </div>
+    <div id="roster-champion-grid"></div>
+
+    <!-- Chiedere prima di buttare via il lavoro (richiesta dell'utente
+         2026-09-06). Tre scelte, non due: "vuoi uscire oppure salvare i
+         dati?" ha bisogno anche di un "ho sbagliato a cliccare". Un
+         confirm() nativo ne offre solo due, quindi e' un velo interno al
+         modale. -->
+    <div id="roster-unsaved" class="roster-unsaved hidden">
+      <div class="roster-unsaved-box">
+        <p id="roster-unsaved-text"></p>
+        <div class="roster-unsaved-buttons">
+          <button type="button" id="roster-unsaved-save">Salva ed esci</button>
+          <button type="button" id="roster-unsaved-discard">Esci senza salvare</button>
+          <button type="button" id="roster-unsaved-cancel">Annulla</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tournament-modal" class="modal-overlay hidden">
+  <div class="modal-content tournament-modal-content">
+    <div class="modal-header">
+      <h2>Modalità torneo</h2>
+      <button id="tournament-close" class="icon-btn">✕</button>
+    </div>
+
+    <p class="tournament-warning">
+      Connette DriftDraft a una draft reale su drafter.lol,<br>
+      ban/pick veri compaiono in tempo reale.<br>
+      La finestra del browser rimane visibile in caso di problemi
+    </p>
+
+    <input type="text" id="tournament-url" placeholder="Link drafter.lol della draft room...">
+
+    <!-- Connessione in DUE TEMPI (2026-09-05, richiesta dell'utente: "vorrei
+         evitare di scrivere il nome completo ogni volta"). Prima si incolla
+         solo il link; poi questo blocco si riempie da solo con i team VERI
+         letti dalla draft room e con i soli lati ancora liberi - il campo
+         "nome esatto del tuo team" e i due bottoni Blue/Red fissi che
+         stavano qui non servono piu'. -->
+    <div id="tournament-join-choices" class="hidden">
+      <div class="tournament-join-label">Il tuo team</div>
+      <div id="tournament-team-choices" class="tournament-choice-row"></div>
+      <div class="tournament-join-label">Lato</div>
+      <div id="tournament-side-choices" class="tournament-choice-row"></div>
+    </div>
+
+    <div id="tournament-connect-status"></div>
+
+    <div class="modal-footer">
+      <button id="tournament-connect">Connetti</button>
+    </div>
+  </div>
+</div>
+
+<div id="training-modal" class="modal-overlay hidden">
+  <div class="modal-content tournament-modal-content">
+    <div class="modal-header">
+      <h2>Modalità training</h2>
+      <button id="training-close" class="icon-btn">✕</button>
+    </div>
+
+    <p class="tournament-warning">
+      Allenati contro un bot con due modalità:<br>
+      -Squadra: il bot gioca come una squadra pro vera<br>
+      -Libera: usa solo il valore sinergistico\counter
+    </p>
+
+    <div class="row-with-buttons">
+      <button id="training-mode-team" class="tournament-side-btn">Contro una squadra pro</button>
+      <button id="training-mode-freeform" class="tournament-side-btn">Libera</button>
+    </div>
+
+    <!-- Sotto-scelta della modalita' squadra: o a sorte, o la scelgo io.
+         Nascosta finche' non si sceglie quella modalita', altrimenti il
+         modale mostra opzioni che non fanno niente. -->
+    <div id="training-team-pick" class="hidden">
+      <!-- Un solo controllo invece di "Casuale"/"Scelgo io" + campo di
+           ricerca: aprendolo si trova "Casuale" in cima e sotto tutte le
+           squadre, e scrivendo si filtra. Stesso combobox del roster, con
+           in piu' il filtro (vedi setupCombo). -->
+      <div class="row-with-buttons">
+        <div class="combo" id="training-team-picker">
+          <input type="text" id="training-team-combo" placeholder="Casuale" autocomplete="off">
+          <button type="button" class="combo-arrow" title="Scegli contro chi allenarti">▼</button>
+          <div class="combo-list hidden"></div>
+        </div>
+      </div>
+      <p class="tournament-warning" id="training-team-hint"></p>
+    </div>
+
+    <div class="row-with-buttons">
+      <button id="training-side-blue" class="tournament-side-btn">Blue Side</button>
+      <button id="training-side-red" class="tournament-side-btn">Red Side</button>
+    </div>
+
+    <div class="row-with-buttons" id="training-enemy-pool-row">
+      <input type="text" id="training-enemy-pool-url" placeholder="Link op.gg multisearch squadra avversaria (opzionale)...">
+    </div>
+    <p class="tournament-warning" id="training-enemy-pool-hint">
+      Immettilo se vuoi ridurre i pick solo contro un team specifico.
+    </p>
+
+    <div id="training-start-status"></div>
+
+    <div class="modal-footer">
+      <button id="training-start">Inizia allenamento</button>
+    </div>
+  </div>
+</div>
+
+<div id="saved-drafts-modal" class="modal-overlay hidden">
+  <div class="modal-content saved-drafts-modal-content">
+    <div class="modal-header">
+      <h2>Draft salvate</h2>
+      <button id="saved-drafts-close" class="icon-btn">✕</button>
+    </div>
+    <div id="saved-drafts-list"></div>
+  </div>
+</div>
+
+<div id="tag-editor-modal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Modifica tag campioni</h2>
+      <button id="tag-editor-close" class="icon-btn">✕</button>
+    </div>
+    <p class="tournament-warning">
+      Le modifiche qui si aggiungono a champions.xlsx senza toccarlo - restano al sicuro anche se lo modifichi
+      a mano in Excel, e "Ripristina da Excel" le annulla in qualunque momento.
+    </p>
+    <div id="tag-editor-body">
+      <div id="tag-editor-list-col">
+        <input type="text" id="tag-editor-search" placeholder="Cerca campione...">
+        <div id="tag-editor-champ-list"></div>
+      </div>
+      <div id="tag-editor-panel" class="hidden">
+        <div id="tag-editor-champ-header">
+          <img id="tag-editor-champ-icon">
+          <h3 id="tag-editor-champ-name"></h3>
+        </div>
+        <div class="tag-editor-group">
+          <h4>Comp</h4>
+          <div id="tag-editor-comps" class="tag-editor-checks"></div>
+        </div>
+        <div class="tag-editor-group">
+          <h4>Ruoli</h4>
+          <div id="tag-editor-roles" class="tag-editor-checks"></div>
+        </div>
+        <div class="tag-editor-group">
+          <h4>Tag funzionali</h4>
+          <div id="tag-editor-tags" class="tag-editor-checks"></div>
+        </div>
+        <div class="row-with-buttons">
+          <button id="tag-editor-save">Salva</button>
+          <button id="tag-editor-reset">Ripristina da Excel</button>
+        </div>
+        <div id="tag-editor-status"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/web/app.js"></script>
+</body>
+</html>

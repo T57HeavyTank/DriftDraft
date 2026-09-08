@@ -1,0 +1,4186 @@
+/* ============================================================================
+   PALETTE E LINGUAGGIO VISIVO: NEUMORPHISM
+   ============================================================================
+   Adottato definitivamente 2026-09-05 (prima provato come foglio di override
+   separato `style-neumorphic.css`, poi fuso qui e quel file eliminato su
+   richiesta dell'utente: "vorrei proprio virare con questa nuova grafica
+   lasciando completamente indietro la vecchia... da non appesantire l'app
+   con vecchi dati inutilizzati"). Il tema precedente (fondo #151515,
+   pannelli #1f1f1f/#2a2a2a con bordi netti blu, sfondo nebulosa animato) non
+   esiste piu' da nessuna parte in questo file - se serve, sta nei backup
+   (vedi memoria di progetto).
+
+   PRINCIPIO: superficie UNICA e continua. Sfondo e componenti hanno lo
+   STESSO colore, e la forma si legge solo dalla luce: due ombre opposte per
+   ogni elemento (scura in basso a destra, chiara in alto a sinistra) che lo
+   fanno sembrare estruso dal materiale o premuto dentro di esso. Niente
+   bordi netti, niente riquadri di colore diverso.
+
+   REGOLA PRATICA, vale per ogni componente nuovo:
+   - ci si clicca sopra  -> ombra ESTERNA (--nm-out*), e --nm-in* su :active
+   - ci si scrive dentro -> ombra INTERNA (--nm-in*), sempre
+   - e' selezionato/attivo -> ombra INTERNA, non un bordo o un outline
+   ============================================================================ */
+
+:root {
+  /* Palette UI di partenza - da preferenze utente, invariata dal tema
+     precedente: sono i tre azzurri scelti a suo tempo, il neumorphism ha
+     cambiato le SUPERFICI, non i colori del testo e degli accenti. */
+  --sky-light: #d0e1f5;
+  --sky-mid: #aebce8;
+  --blue-dark: #434c92;
+
+  /* --- Superficie unica ---
+     Ardesia blu, non il grigio chiaro del neumorphism "da manuale": tiene la
+     palette azzurra qui sopra e non fa a pugni con 170 icone campione
+     sature. Volutamente NON scurissima come il #151515 del tema precedente:
+     sotto una certa luminosita' l'ombra scura non ha piu' spazio dove
+     esistere e l'effetto rilievo sparisce - serve margine in ENTRAMBE le
+     direzioni, verso il buio e verso la luce. */
+  --nm-surface: #2c3140;
+  --nm-surface-lo: #262a37;
+  --nm-surface-hi: #333a4b;
+
+  /* Tinta dei PANNELLI, di pochissimo piu' chiara e piu' azzurra della
+     superficie (vedi .panel). Richiesta dell'utente 2026-09-05: con tutto
+     esattamente dello stesso colore l'insieme risultava "molto
+     mono-cromatico" e i riquadri laterali non si identificavano.
+     Lo scarto resta contenuto (contrasto misurato 1.22 contro il fondo):
+     il neumorphism regge finche' il pannello legge come la stessa materia
+     illuminata un po' diversamente, non come un rettangolo incollato sopra
+     - cioe' il tema a riquadri che abbiamo appena tolto.
+
+     Questo valore era stato provato e SCARTATO in un primo giro, poi
+     ripreso: il primo test era stato fatto PRIMA che i pannelli
+     ridefinissero --nm-surface al proprio interno (vedi .panel), quindi i
+     chip e i bottoni dentro restavano della tinta del fondo e l'insieme
+     leggeva davvero come un riquadro riportato. Con l'ereditarieta'
+     attiva lo stesso colore regge, perche' tutto cio' che sta nel
+     pannello e' della sua stessa materia. Promemoria: un colore di
+     superficie qui non si giudica MAI da solo, ma insieme a cosa fanno i
+     suoi discendenti.
+
+     Se un giorno servisse ridurlo, il gradino precedente era #31384a. */
+  --nm-panel: #363e54;
+
+  /* Nel neumorphism scuro la luce va tenuta bassissima (su fondo chiaro
+     sarebbe bianco pieno): sopra ~0.08 smette di leggere come riflesso e
+     diventa un bordo chiaro finto. Azzurrina invece che bianca pura, per
+     restare dentro la palette. */
+  --nm-dark: rgba(12, 15, 22, 0.8);
+  --nm-light: rgba(168, 192, 232, 0.055);
+
+  --nm-out: 6px 6px 13px var(--nm-dark), -6px -6px 13px var(--nm-light);
+  --nm-out-sm: 3px 3px 7px var(--nm-dark), -3px -3px 7px var(--nm-light);
+  --nm-out-xs: 2px 2px 4px var(--nm-dark), -2px -2px 4px var(--nm-light);
+  --nm-out-lg: 10px 10px 22px var(--nm-dark), -10px -10px 22px var(--nm-light);
+
+  --nm-in: inset 4px 4px 9px var(--nm-dark), inset -4px -4px 9px var(--nm-light);
+  --nm-in-sm: inset 2px 2px 5px var(--nm-dark), inset -2px -2px 5px var(--nm-light);
+  --nm-in-xs: inset 1px 1px 3px var(--nm-dark), inset -1px -1px 3px var(--nm-light);
+
+  /* Colori che dipendono dal TEMA (vedi .theme-light in fondo al file).
+     Erano scritti a mano decine di volte come rgba(...) fisse: cosi' il tema
+     chiaro avrebbe dovuto ripeterle tutte una per una. Raccolti qui in
+     token con un NOME DI RUOLO, non di colore - il tema chiaro ridefinisce
+     solo questi. */
+
+  /* Anello di "selezionato/attivo": sostituisce i vecchi bordi netti. */
+  --nm-ring: rgba(208, 225, 245, 0.28);
+  --nm-ring-strong: rgba(208, 225, 245, 0.4);
+  --nm-ring-faint: rgba(208, 225, 245, 0.18);
+  --nm-thumb-glow: rgba(208, 225, 245, 0.35);
+
+  /* Testo di un controllo disabilitato (che qui e' anche PIATTO, senza
+     rilievo - vedi le regole :disabled). */
+  --nm-text-disabled: rgba(174, 188, 232, 0.35);
+  --nm-placeholder: rgba(174, 188, 232, 0.45);
+
+  /* Bagliore bluastro interno: bersaglio di un drag, chip "coperto". */
+  --nm-glow: rgba(90, 105, 190, 0.65);
+  --nm-glow-soft: rgba(90, 105, 190, 0.5);
+
+  /* --- Pick suggeriti: un colore per LATO ---
+     Blu = conviene al Blue Side, rosso al Red Side (vedi i tre stati della
+     cornice piu' sotto, .suggest-blue / .suggest-red / .suggest-contested).
+     Era oro/rosso quando le righe erano "per noi"/"per loro": col passaggio
+     ai lati l'oro non corrispondeva piu' a niente, mentre blu e rosso si
+     leggono da soli senza dover guardare l'etichetta - "conviene anche che
+     il dorato-rosso vengano sostituiti da rosso-blu, in modo da selezionare
+     correttamente il side" (utente, 2026-09-06).
+     Il rosso e' volutamente piu' acceso del rosso comp (#d64545,
+     "TeamFight \ WomboCombo") e il blu piu' acceso degli azzurri della UI
+     (--sky-mid, --nm-glow): quelli sono superfici e bordi netti, questi
+     aloni diffusi, e devono restare distinguibili quando capitano sulla
+     stessa card. Uguali nei due temi: sono segnali, non superfici. */
+  --suggest-blue: #4dabff;
+  --suggest-blue-halo: rgba(77, 171, 255, 0.72);
+  --suggest-blue-ring: rgba(77, 171, 255, 0.95);
+  --suggest-red: #ff5252;
+  --suggest-red-halo: rgba(255, 82, 82, 0.72);
+  --suggest-red-ring: rgba(255, 82, 82, 0.95);
+
+  /* Ombra portata VERA (diversa dalle due neumorfiche): serve solo a cio'
+     che galleggia sopra il piano, cioe' modali e popover. */
+  --nm-drop: rgba(8, 10, 16, 0.5);
+  --nm-drop-lg: rgba(8, 10, 16, 0.55);
+  --nm-overlay: rgba(20, 23, 32, 0.55);
+
+  /* --panel-bg e --panel-bg-raised sono state ELIMINATE il 2026-09-05
+     insieme all'introduzione di --nm-panel: erano solo alias di
+     --nm-surface, e proprio per questo impedivano l'ereditarieta' che
+     serve ora. Essendo dichiarate su :root venivano risolte una volta li'
+     e poi ereditate GIA' calcolate, quindi restavano ancorate alla tinta
+     del fondo anche dentro un pannello - il layer 1 del bordo comp e il
+     diagramma counter (SVG generato in app.js) risultavano piu' scuri del
+     pannello che li conteneva. Ora tutto usa direttamente --nm-surface,
+     che i contenitori-pannello ridefiniscono al proprio interno. */
+  --bg: var(--nm-surface);
+
+  --text: var(--sky-light);
+  --text-dim: var(--sky-mid);
+
+  /* Quasi invisibile ma non zero: i separatori verticali della toolbar e le
+     linee di sezione restano appena percettibili senza reintrodurre i
+     riquadri veri del tema precedente (dove questa era --blue-dark pieno). */
+  --border: rgba(168, 192, 232, 0.07);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--nm-surface);
+  /* Luce d'ambiente molto tenue dall'alto a sinistra, coerente con la
+     direzione delle ombre di ogni singolo elemento: senza, una superficie
+     piatta cosi' grande legge come "vuoto" invece che come materiale.
+     background-attachment:fixed la tiene ferma mentre la pagina scorre. */
+  background-image: radial-gradient(
+    ellipse 120% 90% at 22% 0%,
+    rgba(168, 192, 232, 0.045),
+    rgba(0, 0, 0, 0) 62%
+  );
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: calc(var(--sidebar-scale, 1.2) * 260px) 1fr calc(var(--sidebar-scale, 1.2) * 260px);
+  /* Le ombre esterne dei pannelli hanno bisogno di spazio ai bordi dello
+     schermo, altrimenti vengono tagliate dal viewport e il rilievo si perde
+     proprio dove si nota di piu'. Solo +2px rispetto ai 12px di prima, non
+     di piu': #toolbar e' gia' in leggero overflow di suo (misurato 7px a
+     1600px di larghezza, ben 407px alla larghezza di default della finestra
+     - vedi main.py, 1200x800) e ogni pixel tolto a #main lo peggiora. Il
+     grosso del respiro arriva invece dal padding interno delle due barre
+     laterali (vedi #sidebar piu' sotto), che non costa nulla a #main. */
+  gap: 14px;
+  height: 100vh;
+  padding: 14px;
+}
+
+/* ---------- Sidebar sinistra/destra: squadra + rilevamento comp ---------- */
+
+#sidebar,
+#sidebar-right {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  /* Queste due colonne scorrono (overflow-y:auto): senza un po' di padding
+     proprio, l'ombra esterna dei pannelli viene tranciata di netto dal bordo
+     dell'area scrollabile. Costa nulla a #main, a differenza del padding di
+     #app - vedi il commento li' sopra. */
+  padding: 4px 6px;
+}
+
+/* Estruso dalla superficie: nessun bordo, la forma la fa solo la luce. */
+.panel {
+  /* Ridefinire --nm-surface QUI dentro fa si' che ogni discendente che la
+     usa (chip, slot, input, interruttori, bottoni...) adotti la tinta del
+     pannello invece di quella del fondo pagina. Senza, un chip ESTRUSO
+     dentro un pannello piu' chiaro risulterebbe piu' SCURO del piano su cui
+     poggia - l'esatto contrario di cio' che l'estrusione dovrebbe dire.
+     Cosi' invece ogni pannello si comporta come un blocco di materiale a
+     se': quello che ne esce e' della sua stessa tinta, quello che ci si
+     scava dentro pure.
+     Lo stesso schema e' ripetuto su ogni altro contenitore-pannello di
+     questa UI (.modal-content, .training-role-team, #tournament-evaluation,
+     #role-confirm-panel, i due popover, le barre di stato torneo/training):
+     se e' una superficie sollevata che raggruppa contenuto, porta la tinta
+     pannello e la passa ai suoi discendenti. */
+  --nm-surface: var(--nm-panel);
+  background: var(--nm-panel);
+  border: none;
+  border-radius: 20px;
+  padding: 14px 16px;
+  box-shadow: var(--nm-out);
+}
+
+.panel h2 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--sky-mid);
+  /* SOLO il testo del titolo scala con --sidebar-scale, MAI l'intera
+     .panel-title-row (che contiene anche slider/interruttore) - altrimenti
+     quei controlli tornerebbero a spostarsi/ridimensionarsi mentre ci si
+     interagisce, lo stesso problema di instabilita' gia' risolto altrove.
+     Non sposta lo slider a destra: la riga resta larga quanto .panel (mai
+     zoomato), "space-between" continua ad ancorare il controllo al bordo
+     destro fisso a prescindere da quanto cresce il testo a sinistra. */
+  zoom: var(--sidebar-scale, 1.2);
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* Altezza fissa (non decisa dal contenuto) - senza questo, il titolo
+     zoomato (vedi ".panel h2" sotto) fa crescere l'altezza della riga, e
+     "align-items:center" ricalcola la posizione verticale di slider/
+     interruttore ad ogni cambio di scala (~4px misurati) - piccolo ma
+     evitabile, stesso principio del fix sulla posizione orizzontale dello
+     slider. overflow:visible lascia comunque il testo zoomato debordare
+     oltre il bordo della riga senza essere tagliato. */
+  height: 24px;
+  overflow: visible;
+  /* "Comp rilevate" (h2 nudo, non dentro .panel-title-row) ha ancora il
+     margine sotto di ".panel h2" (8px) intatto - qui sotto invece e' stato
+     azzerato da ".panel-title-row h2 { margin:0 }" (serviva per non
+     sballare l'altezza fissa della riga sopra) senza essere rimesso da
+     nessuna parte, lasciando "Blue Side"/"Red Side"/"Counter naturali"
+     senza spazio prima del contenuto sotto - bug trovato dall'utente
+     confrontando le due spaziature. Stesso valore di base (8px) rimesso
+     qui, MA moltiplicato per --sidebar-scale come fa gia' ".panel h2"
+     (che e' zoomato, quindi il suo margine cresce anche lui con la scala)
+     - senza il calc() qui sotto i due spazi combacerebbero solo a scala
+     1x, divergendo a ogni altro valore (11px vs 8px misurato a scala
+     1.4x). margin-bottom (a differenza di zoom su questa stessa riga) non
+     tocca l'altezza propria della riga, quindi non reintroduce
+     l'instabilita' di posizione di slider/interruttore gia' risolta. */
+  margin-bottom: calc(8px * var(--sidebar-scale, 1.2));
+}
+
+.panel-title-row h2 {
+  margin: 0;
+}
+
+/* Ingrandisce in proporzione (larghezza E altezza insieme, non solo la
+   larghezza) tutto il CONTENUTO dei pannelli laterali - richiesta esplicita
+   dell'utente dopo aver visto che allargare solo #app (vedi sotto) lasciava
+   slot/card della stessa altezza di sempre, "stesi" invece che ingranditi
+   armoniosamente. zoom (non transform:scale, che non influenzerebbe il
+   layout dei genitori/fratelli) fa scalare insieme dimensioni in px reali
+   (altezze fisse tipo .team-slot, padding, font-size) mentre le larghezze
+   in percentuale restano comunque ancorate alla larghezza vera del
+   pannello (quella decisa da #app qui sotto) - risultato: contenuto che
+   cresce in entrambe le direzioni, non solo "steso" orizzontalmente.
+   DELIBERATAMENTE non su .panel-title-row/h2: li' vivono anche lo slider di
+   questa stessa scala e l'interruttore mostra/nascondi - se fossero dentro
+   l'area zoomata, la LORO stessa dimensione/posizione cambierebbe mentre li
+   si trascina/clicca, lo stesso problema di instabilita' gia' visto (e
+   risolto) spostando lo slider fuori dalla colonna centrale che si
+   ridimensionava da sola. */
+.panel-body {
+  zoom: var(--sidebar-scale, 1.2);
+}
+
+/* Interruttore on/off in stile mobile (richiesto con uno screenshot di
+   riferimento) - usato per mostrare/nascondere "Counter naturali" (solo un
+   aiuto per neofiti, deve poter sparire per chi non lo trova utile). */
+.toggle-switch {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex: none;
+}
+
+.toggle-switch input {
+  display: none;
+}
+
+/* Binario scavato + pomello estruso: la lettura fisica piu' immediata del
+   linguaggio neumorfico, su un componente che aveva gia' la forma giusta.
+   Acceso, il binario prende un alone bluastro INTERNO (non un bordo, come
+   faceva prima) e il pomello si schiarisce. */
+.toggle-track {
+  position: relative;
+  display: block;
+  width: 36px;
+  height: 20px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 999px;
+  box-shadow: var(--nm-in-sm);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--sky-mid);
+  box-shadow: var(--nm-out-xs);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.toggle-switch input:checked ~ .toggle-track {
+  box-shadow: var(--nm-in-sm), inset 0 0 8px var(--nm-glow-soft);
+}
+
+/* 2px (left) + 16px (translate) + 16px (width) = 34px dentro un binario di
+   36px: restano esattamente 2px anche a destra, simmetrici al margine di
+   partenza. Se si cambia la larghezza del binario vanno rifatti i conti. */
+.toggle-switch input:checked ~ .toggle-track .toggle-thumb {
+  transform: translateX(16px);
+  background: var(--sky-light);
+  box-shadow: var(--nm-out-xs), 0 0 8px var(--nm-thumb-glow);
+}
+
+#counter-diagram-body.hidden {
+  display: none;
+}
+
+.icon-btn {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 10px;
+  color: var(--sky-mid);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  font-size: 13px;
+  margin-bottom: 8px;
+  box-shadow: var(--nm-out-sm);
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.icon-btn:hover {
+  color: var(--sky-light);
+  box-shadow: var(--nm-out);
+}
+
+/* Il gesto caratteristico del linguaggio: al click il bottone sprofonda
+   davvero nel materiale (da ombra esterna a interna) invece di limitarsi a
+   cambiare colore. Vale per ogni bottone di questa UI. */
+.icon-btn:active {
+  box-shadow: var(--nm-in-sm);
+  color: var(--sky-light);
+}
+
+.pool-import {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+/* Ci si scrive dentro -> scavato nel materiale, sempre. */
+.pool-import input {
+  flex: 1;
+  min-width: 0;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-in);
+  padding: 4px 8px;
+  color: var(--text);
+  font-size: 11px;
+  transition: box-shadow 0.16s ease;
+}
+
+/* Il focus non aggiunge un bordo (sarebbe un ritorno al tema vecchio):
+   approfondisce l'incasso con un filo di luce interna e schiarisce il testo. */
+.pool-import input:focus {
+  outline: none;
+  box-shadow: var(--nm-in), inset 0 0 0 1px var(--nm-ring-faint);
+  color: var(--sky-light);
+}
+
+.pool-import button {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  color: var(--sky-mid);
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.pool-import button:hover {
+  box-shadow: var(--nm-out);
+  color: var(--sky-light);
+}
+
+.pool-import button:active {
+  box-shadow: var(--nm-in-sm);
+  color: var(--sky-light);
+}
+
+/* Disabilitato = PIATTO: ne' estruso ne' premuto, non c'e' niente da
+   toccare. Piu' espressivo di una semplice opacita' ridotta, e coerente su
+   tutti i bottoni disabilitati di questa UI. */
+.pool-import button:disabled {
+  box-shadow: none;
+  background: var(--nm-surface-lo);
+  color: var(--nm-text-disabled);
+  opacity: 1;
+  cursor: default;
+}
+
+.pool-chip {
+  display: inline-block;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: none;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-out-xs);
+  color: var(--text-dim);
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+/* Selezionato = premuto dentro. Sostituisce l'anello netto "0 0 0 1px" che
+   usava il tema precedente per lo stesso scopo. */
+.pool-chip.active {
+  box-shadow: var(--nm-in-xs), inset 0 0 0 1px var(--nm-ring);
+  color: var(--sky-light);
+}
+
+.pool-chip.error {
+  color: #e08080;
+  box-shadow: var(--nm-out-xs), inset 0 0 0 1px rgba(224, 128, 128, 0.4);
+}
+
+/* Sotto-chip per singolo giocatore, stesso pattern visivo di .comp-tags/
+   .comp-tag (richiesto esplicitamente dall'utente come riferimento) - una
+   pool intera squadra puo' avere fino a 5 di queste sotto-chip. */
+.player-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.player-chip {
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: none;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-out-xs);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.player-chip.active {
+  color: var(--sky-light);
+  outline: none;
+  box-shadow: var(--nm-in-xs), inset 0 0 0 1px var(--nm-ring);
+}
+
+#team-slots,
+#team-slots-2 {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Slot VUOTO = letteralmente un incavo che aspetta di essere riempito: il
+   tratteggio del tema precedente e' diventato un'ombra interna. */
+.team-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-in-sm);
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+/* Red Side e' sulla destra dello schermo - agganciare "Slot N"/icona+nome al
+   bordo destro dello slot (invece che a sinistra, come Blue Side) rispecchia
+   la posizione del pannello, richiesta esplicita dell'utente. */
+#team-slots-2 .team-slot {
+  justify-content: flex-end;
+}
+
+.team-slot .champ-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot-counter-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 10px;
+  border: none;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-out-xs);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.slot-counter-btn.active {
+  color: var(--sky-light);
+  box-shadow: var(--nm-in-xs), inset 0 0 0 1px var(--nm-ring);
+}
+
+/* position:FIXED e posizionato via JS (vedi openCounterPopover in app.js),
+   non piu' absolute ancorato allo slot - BUG REALE segnalato dall'utente
+   2026-09-05: "cerca counter" non apriva piu' la scelta della corsia.
+   Causa: dal passaggio degli slot pieni alla splash art ritagliata,
+   `.team-slot.filled` ha `overflow:hidden` (serve a far rispettare gli
+   angoli arrotondati all'immagine che lo riempie). Il popover, essendo un
+   DISCENDENTE dello slot e aprendosi a `top:calc(100% + 4px)` cioe' appena
+   SOTTO di esso, cadeva per intero nella zona ritagliata: veniva creato
+   regolarmente (2 bottoni ruolo presenti nel DOM, rettangolo 114x66 valido)
+   ma non disegnato ne' cliccabile - document.elementFromPoint sul suo centro
+   restituiva lo .team-slot sottostante. Il bottone rispondeva all'hover
+   perche' quello sta DENTRO lo slot, da cui il sintomo "appare ma non fa
+   nulla". Verificato identico con e senza il foglio del tema neumorfico:
+   preesistente, non causato da quello.
+   position:fixed si ancora al viewport invece che a un antenato, quindi
+   nessun overflow:hidden intermedio puo' piu' ritagliarlo. E' esattamente
+   la stessa soluzione gia' adottata per .save-draft-popover (vedi il
+   commento in index.html: stesso problema, li' causato dall'overflow-y:auto
+   delle sidebar) - un solo pattern per entrambi i popover di questa UI.
+   NOTA: spostandosi fuori da .panel-body il popover non eredita piu' il suo
+   `zoom` (--sidebar-scale), quindi non scala piu' con lo slider dei pannelli
+   laterali: identico ai popover salva-draft, che sono fuori per lo stesso
+   motivo. */
+.counter-role-popover {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+  --nm-surface: var(--nm-panel);
+  background: var(--nm-panel);
+  border: none;
+  border-radius: 16px;
+  padding: 8px;
+  /* Sollevato SOPRA la superficie: le due ombre neumorfiche piu' una vera
+     ombra portata, che e' cio' che lo stacca dal piano invece di limitarsi
+     a suggerire un rilievo. */
+  box-shadow: var(--nm-out), 0 10px 24px var(--nm-drop);
+}
+
+.counter-role-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  border: none;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-out-xs);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.counter-role-btn img {
+  width: 18px;
+  height: 18px;
+}
+
+.counter-role-btn.active {
+  box-shadow: var(--nm-in-xs), inset 0 0 0 1px var(--nm-ring);
+}
+
+/* Banner rettangolare 16:9 con splash art al posto della riga compatta
+   icona+nome, per i pick fatti (non i ban - richiesto esplicitamente
+   dall'utente 2026-09-03/04, "molto gradita" su drafterlol). Le splash art
+   "centered" di Community Dragon sono gia' 1280x720 = 16:9 esatto (verificato
+   coi file scaricati da scripts/sync_splash_art.py), quindi object-fit:cover
+   con object-position di default (centro) non ritaglia MAI nulla - le due
+   proporzioni combaciano a monte, cover qui serve solo a riempire per
+   sicurezza in caso di variazioni future dell'immagine. Il tecnica del bordo-
+   comp (background-image a 2 layer, vedi piu' sotto in questo file) resta
+   INVARIATA: disegna intorno al border-box a prescindere da cosa c'e' dentro
+   il content-box, quindi funziona identica su questa forma piu' larga senza
+   bisogno di nessuna modifica - verificato dal vivo col prototipo
+   2026-09-03/04 prima ancora di scrivere questo CSS definitivo.
+   .empty-label/slot vuoti NON sono toccati da questa regola (scoped solo a
+   .filled) - restano la riga compatta 40px di sempre. */
+.team-slot.filled {
+  border-style: solid;
+  /* Riempito ESCE dal materiale (lo slot vuoto invece e' un incavo, vedi
+     .team-slot sopra): e' un oggetto appoggiato sulla superficie. Qui
+     SOLTANTO box-shadow - background/border-color/border-width appartengono
+     al sistema dei bordi comp (background-image a 2 layer + background-clip/
+     origin, vedi il commentone piu' sotto in questo file) e non vanno
+     toccati: le due cose convivono senza interferire. */
+  box-shadow: var(--nm-out-sm);
+  height: auto;
+  /* Non il 16:9 nativo della splash "centered" (troppo alto, "occupa troppo
+     spazio verticale" - confronto diretto con drafterlol richiesto
+     dall'utente 2026-09-04, screenshot alla mano: la SUA versione ritaglia
+     la stessa immagine molto piu' stretta in verticale, "a circa meta'/un
+     terzo", per lasciare spazio al resto della UI). object-fit:cover sotto
+     ritaglia automaticamente alto/basso per riempire questo rettangolo piu'
+     panoramico. */
+  aspect-ratio: 3 / 1;
+  padding: 0;
+  overflow: hidden;
+}
+
+.team-slot.filled img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Le splash "centered" di Community Dragon hanno il volto nella meta'
+     superiore del frame 1280x720, non esattamente al centro - object-
+     position sposta la finestra di ritaglio verso l'alto cosi' un banner
+     piu' basso non taglia comunque via il volto. Valore scelto a occhio sul
+     primo tentativo, verificare/aggiustare via screenshot reale. */
+  object-position: center 22%;
+  border-radius: 0;
+  flex: none;
+}
+
+/* Nome sovrapposto in basso (overlay assoluto sull'img, non piu' un figlio
+   flex in riga) - position:absolute qui si aggancia al PADDING-BOX di
+   .team-slot (gia' position:relative), cioe' resta correttamente DENTRO
+   l'anello del bordo-comp invece di sovrapporlo (stessa distinzione padding-
+   box/border-box gia' vista - e sbagliata una volta - nella saga dei bordi
+   arrotondati, vedi commento piu' sotto in questo file). */
+.team-slot.filled .champ-name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  flex: none;
+  padding: 4px 8px;
+  background: linear-gradient(to top, rgba(6, 10, 20, 0.9), rgba(6, 10, 20, 0));
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+#team-slots-2 .team-slot.filled .champ-name {
+  text-align: right;
+}
+
+/* Bottoni "cerca counter"/"ripeti da qui" (training) diventano piccole icone
+   sovrapposte nell'angolo, impilate verticalmente se presenti entrambi -
+   nella riga compatta erano figli flex in linea, ma qui l'img da sola
+   riempie tutto lo spazio flex disponibile (nessun posto dove metterli in
+   flusso normale). */
+.team-slot.filled .slot-counter-btn,
+.team-slot.filled .slot-rewind-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+}
+
+.team-slot.filled .slot-counter-btn ~ .slot-rewind-btn {
+  top: 30px;
+}
+
+
+.team-slot.active-slot {
+  box-shadow: var(--nm-in-sm), inset 0 0 0 2px var(--nm-ring-strong);
+}
+
+/* Bersaglio di un drag: incavo piu' profondo con un bagliore bluastro
+   interno, invece del riempimento piatto --blue-dark del tema precedente. */
+.team-slot.drag-over {
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in), inset 0 0 12px var(--nm-glow);
+}
+
+.team-slot img {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+}
+
+.team-slot .empty-label {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+@keyframes slot-pending-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.team-slot.pending,
+.ban-slot.pending {
+  animation: slot-pending-blink 1.1s ease-in-out infinite;
+}
+
+.ban-slots-label {
+  margin-top: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
+/* Speculare come i ban/il bottone salva sotto - richiesta esplicita
+   dell'utente 2026-08-26: l'etichetta "Ban" del lato red deve stare sopra i
+   ban VERI (agganciati a destra), non sopra il bottone salva (agganciato a
+   sinistra). */
+#sidebar-right .ban-slots-label {
+  text-align: right;
+}
+
+.ban-slots {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Stesso motivo di #team-slots-2 sopra - Red Side agganciata a destra. */
+#ban-slots-2 {
+  justify-content: flex-end;
+}
+
+.ban-slot {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  /* ATTENZIONE: questo raggio e il clip-path di .ban-slot.filled (piu' sotto)
+     vanno cambiati SEMPRE IN COPPIA - il clip-path e' cio' che arrotonda il
+     bordo-comp disegnato con border-image, che ignora border-radius per sua
+     natura. Cambiarne uno solo lascia angoli disallineati. */
+  border-radius: 9px;
+  border: none;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in-xs);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.ban-slot.filled {
+  border-style: solid;
+  box-shadow: var(--nm-out-xs);
+}
+
+.ban-slot.active-slot {
+  box-shadow: var(--nm-in-xs), inset 0 0 0 2px var(--nm-ring-strong);
+}
+
+.ban-slot.drag-over {
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in), inset 0 0 10px var(--nm-glow);
+}
+
+.ban-slot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 8px;
+}
+
+.comp-card {
+  border: none;
+  border-radius: 14px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  opacity: 0.55;
+  cursor: pointer;
+  box-shadow: var(--nm-out-xs);
+  transition: opacity 0.15s ease, box-shadow 0.16s ease;
+}
+
+/* currentColor = il colore della comp, impostato via JS. Era un anello
+   interno netto, ora e' un alone della stessa tinta: stessa informazione,
+   letta come luce invece che come bordo. */
+.comp-card.satisfied {
+  opacity: 1;
+  box-shadow: var(--nm-out-sm), inset 0 0 12px -2px currentColor;
+}
+
+.comp-card.filter-active {
+  outline: none;
+  box-shadow: var(--nm-in-sm), inset 0 0 0 1px var(--nm-ring);
+}
+
+.comp-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.comp-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.comp-tags {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.comp-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  /* 10px, non 999px come gli altri chip: a questa altezza e' gia' di fatto
+     una pillola, ed e' il valore su cui il tema e' stato approvato. */
+  border-radius: 10px;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-out-xs);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.comp-tag.covered {
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in-xs), inset 0 0 7px var(--nm-glow-soft);
+  color: var(--sky-light);
+}
+
+.comp-tag.filter-active {
+  outline: none;
+  box-shadow: var(--nm-in-xs), inset 0 0 0 1px var(--nm-ring);
+  color: var(--sky-light);
+}
+
+.comp-profile {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(168, 192, 232, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comp-profile-heading {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.comp-profile-line {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* ---------- Area principale: ricerca + filtri + griglia ---------- */
+
+#main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+#context-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#context-bar #roster-open {
+  margin-bottom: 0;
+  /* Stessa altezza del menu a tendina accanto (misurata: 35px) - resta
+     quadrato (width = height), non un rettangolo, richiesta esplicita
+     dell'utente. Scoped solo qui: .icon-btn e' condivisa anche dai
+     bottoni ✕ dei modali, che non devono affiancare nessun <select>. */
+  width: 35px;
+  height: 35px;
+  font-size: 18px;
+  /* Senza questo, la riga flessibile di #context-bar lo comprime (35px
+     misurati diventavano 29px reali) quando lo spazio scarseggia - il
+     menu a tendina accanto non ne soffre solo perche' ha gia' flex:none
+     per conto suo. */
+  flex-shrink: 0;
+}
+
+#context-team-select {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-in);
+  padding: 8px 12px;
+  color: var(--text);
+  font-size: 13px;
+  flex: none;
+  width: 200px;
+  transition: box-shadow 0.16s ease;
+}
+
+#context-team-opgg-refresh {
+  /* Stessa altezza del bottone ⚙ "Modifica il tuo team" accanto (richiesta
+     esplicita dell'utente, 2026-08-19), stesso trattamento gia' scelto per
+     #roster-open sopra e stessa ragione: .icon-btn di default e' piu'
+     piccolo e ha un margin-bottom pensato per contesti impilati, non per
+     questa riga. */
+  margin-bottom: 0;
+  flex-shrink: 0;
+  width: 35px;
+  height: 35px;
+  font-size: 18px;
+}
+
+#context-team-opgg-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+#context-player-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.context-player-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 999px;
+  box-shadow: var(--nm-out-xs);
+  padding: 4px 10px 4px 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.context-player-chip img {
+  width: 14px;
+  height: 14px;
+}
+
+.context-player-chip.active {
+  color: var(--sky-light);
+  box-shadow: var(--nm-in-xs), inset 0 0 0 1px var(--nm-ring);
+}
+
+#context-tier-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#context-tier-filters.hidden {
+  display: none;
+}
+
+.context-tier-filters-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* "Bordi comp"/"Modifica tag" spostati QUI, fuori dalla toolbar principale
+   sopra la griglia (richiesto esplicitamente dall'utente 2026-08-27/28, con
+   uno screenshot annotato: "vorrei spostare i due tasti in questa posizione
+   in modo da non creare troppa confusione con il cluttering dei tag") - non
+   sono filtri come il resto della toolbar (ricerca/ruolo/counter corsia),
+   sono preferenze di aspetto/amministrazione, meglio separate visivamente.
+
+   BUG REALE trovato dall'utente subito dopo il primo tentativo (screenshot
+   reale, finestra 1920x1080): #champion-grid ha flex:1 dentro #main, ma
+   #main stesso NON e' vincolato ai 100vh di #app (nessun grid-template-rows
+   esplicito su #app - la riga implicita cresce quanto serve al contenuto,
+   e con l'icon-scale corrente 173 campioni superano facilmente 1000px) -
+   quindi non e' #champion-grid a scorrere internamente, e' l'INTERA pagina
+   a crescere oltre la finestra. Un fratello messo dopo #champion-grid nel
+   flusso normale finiva percio' scaricato in fondo a tutto quel contenuto,
+   ben oltre il fondo visibile - "completamente sbagliata" (verificato:
+   #main risultava alto 2314px contro i 1000px di #app, un vero bug di
+   layout preesistente mai emerso prima perche' finora dopo la griglia non
+   c'era mai stato nulla di importante da dover rintracciare). Sistemare
+   davvero l'intera catena di altezze #app->#main->#champion-grid e' un
+   refactor piu' grande di quanto serva qui - fix mirato: position:sticky
+   in fondo al VIEWPORT (bottom:0), cosi' resta raggiungibile scorrendo la
+   pagina qualunque sia il vero contenitore che scorre, senza dover
+   raddrizzare tutta la gerarchia di altezze sopra. */
+.panel-title-row-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+#edit-tags-open {
+  flex: none;
+  height: 20px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 10px;
+  box-shadow: var(--nm-out-sm);
+  padding: 0 8px;
+  color: var(--sky-mid);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+#edit-tags-open:hover {
+  box-shadow: var(--nm-out);
+  color: var(--sky-light);
+}
+
+#edit-tags-open:active {
+  box-shadow: var(--nm-in-sm);
+}
+
+#search {
+  flex: 1;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-in);
+  padding: 10px 16px;
+  color: var(--text);
+  font-size: 14px;
+  transition: box-shadow 0.16s ease;
+}
+
+#search:focus {
+  outline: none;
+  box-shadow: var(--nm-in), inset 0 0 0 1px var(--nm-ring-faint);
+  color: var(--sky-light);
+}
+
+/* Un solo posto per il colore di TUTTI i segnaposto della UI (prima erano
+   ripetuti regola per regola con --text-dim, che qui risulterebbe troppo
+   acceso sulla superficie chiara del neumorphism). */
+::placeholder {
+  color: var(--nm-placeholder);
+}
+
+#role-filters {
+  display: flex;
+  gap: 4px;
+}
+
+/* Separatore verticale: una linea netta sarebbe un corpo estraneo su una
+   superficie continua, quindi e' una sfumatura che svanisce alle due
+   estremita' - come un'incisione nel materiale invece di un bordo. Stesso
+   trattamento su #counter-tier-toggle piu' sotto. */
+#counter-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 4px;
+  padding-left: 12px;
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0),
+    var(--nm-dark) 25%,
+    var(--nm-dark) 75%,
+    rgba(0, 0, 0, 0)
+  );
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  background-position: left center;
+}
+
+/* Regola condivisa da OGNI <label class="toggle-switch-labeled"> (switch +
+   testo) - prima esisteva solo qui, con id specifico #lane-counter-toggle-
+   label ("Counter corsia"), MAI applicata a #suggestions-toggle-label
+   ("Pick suggeriti", stessa identica struttura HTML) che quindi restava un
+   <label> inline senza align-items, testo "sfalsato" verticalmente rispetto
+   allo switch - segnalato dall'utente con screenshot 2026-09-04. Spostata
+   sulla classe condivisa invece di duplicare la regola su un secondo id: le
+   due label sono lo stesso componente, un'unica sorgente di verita' per
+   entrambe (e per ogni altro toggle futuro che riusi questa classe). */
+.toggle-switch-labeled {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* ---------- Chip acceso/spento ----------
+   Alternativa testuale all'interruttore mobile, per i controlli che vivono
+   in una barra di filtri: spento e' estruso come un bottone qualunque,
+   acceso e' premuto dentro il materiale esattamente come gli altri filtri
+   attivi (.role-filter.active, .pool-chip.active, .comp-tag.filter-active).
+   Introdotto 2026-09-05 per "Counter corsia": con l'interruttore "non si
+   capisce se effettivamente è usato oppure no". */
+.toggle-chip {
+  flex: none;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 999px;
+  box-shadow: var(--nm-out-sm);
+  padding: 5px 12px;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.toggle-chip:hover {
+  color: var(--sky-light);
+}
+
+.toggle-chip.active {
+  box-shadow: var(--nm-in-xs), inset 0 0 0 1px var(--nm-ring);
+  color: var(--sky-light);
+}
+
+/* Il chip "Solo pool op.gg" esiste solo quando almeno un lato ha una pool
+   caricata: senza, offrirebbe un filtro su dati che non ci sono. */
+#pool-filter.hidden {
+  display: none;
+}
+
+#counter-tier-toggle {
+  display: flex;
+  gap: 4px;
+  margin-left: 4px;
+  padding-left: 8px;
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0),
+    var(--nm-dark) 25%,
+    var(--nm-dark) 75%,
+    rgba(0, 0, 0, 0)
+  );
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  background-position: left center;
+}
+
+#reset-filters {
+  flex: none;
+  height: 36px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  padding: 0 12px;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+#reset-filters:hover {
+  color: var(--sky-light);
+  box-shadow: var(--nm-out);
+}
+
+#reset-filters:active {
+  box-shadow: var(--nm-in-sm);
+}
+
+#saved-drafts-open,
+#training-mode-open,
+#tournament-mode-open {
+  flex: none;
+  height: 34px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  padding: 0 12px;
+  color: var(--sky-mid);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+#saved-drafts-open:hover,
+#training-mode-open:hover,
+#tournament-mode-open:hover {
+  box-shadow: var(--nm-out);
+  color: var(--sky-light);
+}
+
+#saved-drafts-open:active,
+#training-mode-open:active,
+#tournament-mode-open:active {
+  box-shadow: var(--nm-in-sm);
+}
+
+/* Modalita' ACCESA: il bottone resta premuto dentro il materiale con la sua
+   tinta di stato. Il verde (torneo) e l'ambra (training) restano quelli di
+   sempre: portano informazione, non sono decorazione, e il neumorphism non
+   li tocca. */
+#tournament-mode-open.connected {
+  box-shadow: var(--nm-in-sm), inset 0 0 0 1px rgba(76, 175, 109, 0.55);
+  color: #6fd694;
+}
+
+#tournament-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* Riferimento per il riempimento del timer + taglio agli angoli
+     arrotondati della barra stessa. */
+  position: relative;
+  overflow: hidden;
+  --nm-surface: var(--nm-panel);
+  background: var(--nm-panel);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-out-sm), inset 0 0 0 1px rgba(76, 175, 109, 0.3);
+  padding: 9px 16px;
+  font-size: 12px;
+}
+
+
+/* ---------- Pannello "Pick suggeriti" sotto la griglia ----------
+   Contenitore-pannello a tutti gli effetti: porta la tinta --nm-panel e la
+   passa ai discendenti, come .panel e gli altri (vedi la nota su .panel). */
+#suggestions-panel {
+  --nm-surface: var(--nm-panel);
+  background: var(--nm-panel);
+  border: none;
+  border-radius: 18px;
+  box-shadow: var(--nm-out);
+  padding: 10px 14px 12px;
+  margin: 4px 0 2px;
+  flex: none;
+}
+
+/* Intestazione: interruttore, stato dei dati e bottone di aggiornamento.
+   Restano visibili anche quando non c'e' nessun suggerimento da mostrare
+   (a 0 pick, o dopo il quinto) - e' il motivo per cui il pannello non si
+   nasconde piu'. */
+#suggestions-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+#suggestions-data-info {
+  font-size: 11px;
+  color: var(--text-dim);
+  flex: 1;
+  min-width: 0;
+}
+
+#suggestions-sync {
+  flex: none;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  padding: 5px 12px;
+  color: var(--sky-mid);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+#suggestions-sync:hover:not(:disabled) {
+  box-shadow: var(--nm-out);
+  color: var(--sky-light);
+}
+
+#suggestions-sync:active:not(:disabled) {
+  box-shadow: var(--nm-in-sm);
+}
+
+/* Aggiornamento in corso: piatto e non cliccabile, come ogni altro
+   controllo disabilitato del tema. */
+#suggestions-sync:disabled {
+  box-shadow: none;
+  background: var(--nm-surface-lo);
+  color: var(--nm-text-disabled);
+  cursor: default;
+}
+
+/* Due righe (2026-09-06), una per lato: "Blue Side" e "Red Side". L'etichetta sta a
+   SINISTRA e a larghezza fissa, non sopra la riga: cosi' le card delle due
+   righe partono dallo stesso bordo e si confrontano in colonna a colpo
+   d'occhio - che e' tutto il punto dei pick contesi. align-items:flex-start
+   la tiene in cima quando le card vanno a capo. */
+.suggestions-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.suggestions-row + .suggestions-row {
+  margin-top: 8px;
+}
+
+/* Una riga senza suggerimenti sparisce del tutto (l'altra puo' restare):
+   uno spazio vuoto con la sola etichetta sembrerebbe un errore di
+   caricamento. Vedi fillSuggestionsRow in app.js. */
+.suggestions-row.hidden {
+  display: none;
+}
+
+.suggestions-row-label {
+  flex: none;
+  width: 46px;
+  padding-top: 14px;
+  font-size: 10px;
+  line-height: 1.15;
+  color: var(--text-dim);
+  cursor: help;
+}
+
+/* I suggerimenti sono al massimo 8 per riga (top_n in
+   rank_pick_suggestions): stanno comodamente in riga, ma wrap per le
+   finestre strette. */
+.suggestions-row-list {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Stessa larghezza delle card in griglia e stessa scala: --icon-scale e' la
+   variabile dello slider "Dimensione icone", quindi queste crescono e
+   calano insieme a quelle sopra (richiesta esplicita). Il calcolo e' lo
+   stesso di #champion-grid (minmax(calc(var(--icon-scale) * 56px), 1fr)).
+   NIENTE background qui: come per .champion-card, il fondo e' il layer 1 del
+   bordo comp - vedi la regola condivisa piu' sotto. */
+/* "Non ho abbastanza dati": occupa il posto delle card, in tono minore.
+   Altezza allineata a una card cosi' la riga non salta quando il messaggio
+   sostituisce i suggerimenti. */
+.suggestions-thin {
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--icon-scale, 2) * 28px);
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-dim);
+  cursor: help;
+}
+
+/* NIENTE padding qui: lo porta .suggestion-icon-wrap, che e' cio' che
+   corrisponde davvero a una card della griglia. La card del pannello e'
+   solo il contenitore di [corsia + campione]. */
+.suggestion-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: calc(var(--icon-scale, 2) * 56px);
+  border-radius: 12px;
+  box-shadow: var(--nm-out-xs);
+  cursor: grab;
+  transition: box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+/* Involucro dell'icona: e' QUESTO a portare il bordo comp, non la card
+   intera (2026-09-06). Prima il bordo girava attorno a tutta la card,
+   etichetta della corsia compresa - "il bordo passa completamente
+   all'esterno, e non solo all'esterno del campione. Questo crea una
+   discrepanza su come viene trattato sopra". Ora combacia con la griglia
+   per costruzione: stessa struttura (contenitore con padding 3px e raggio
+   12, immagine dentro con raggio 10) e stessa regola condivisa qui sopra.
+   L'alone blu/rosso dei suggerimenti resta invece sulla CARD, e quella
+   differenza e' voluta: "lascia stare il colore del bordo pick suggeriti,
+   mi sta bene quella come discrepanza per riconoscerlo meglio". */
+.suggestion-icon-wrap {
+  display: block;
+  width: 100%;
+  padding: 3px;
+  border-radius: 12px;
+}
+
+.suggestion-card:hover {
+  box-shadow: var(--nm-out-sm);
+  transform: translateY(-2px);
+}
+
+/* Riga della corsia: resta ALTA anche quando il ruolo manca (campione mai
+   visto nelle draft pro scaricate), cosi' le icone di tutte le card restano
+   allineate fra loro invece di ballare in verticale. */
+.suggestion-role {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 13px;
+  font-size: 9px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.suggestion-role img {
+  width: 11px;
+  height: 11px;
+}
+
+.suggestion-icon {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  display: block;
+  background: var(--nm-surface);
+  -webkit-user-drag: none;
+}
+
+/* ---------- Barra del timer in modalita' torneo ----------
+   La striscia parte piena e si svuota da destra verso sinistra mentre il
+   timer scende. Il COLORE lo calcola app.js (updateTournamentTimerBar) e lo
+   scrive qui come background-color: verde quando c'e' tempo, giallo verso i
+   15 secondi, rosso verso i 10, con passaggio continuo - non a scatti, come
+   richiesto. Sotto i 5 secondi si aggiunge la classe .critical che la fa
+   lampeggiare.
+
+   Semitrasparente apposta: sta DIETRO al testo della barra di stato (fase,
+   secondi, bottoni), che deve restare leggibile in entrambi i temi. */
+#tournament-timer-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  /* 1s lineare = esattamente il passo con cui il sito scala i secondi:
+     la barra scorre di continuo invece di scattare ad ogni lettura (il
+     polling gira a 100ms, ma il valore vero cambia una volta al secondo). */
+  transition: width 1s linear, background-color 1s linear;
+}
+
+#tournament-timer-bar.critical {
+  animation: tournament-timer-blink 0.55s ease-in-out infinite;
+}
+
+@keyframes tournament-timer-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Tutto il contenuto vero della barra sta sopra al riempimento. */
+#tournament-status > *:not(#tournament-timer-bar) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Il numero dei secondi accanto alla fase: piu' marcato di prima, ora che
+   la striscia dietro gli da' contesto. */
+#tournament-timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+#tournament-status.hidden {
+  display: none;
+}
+
+/* Modalita' training (feature 4, allenamento vs bot da dati pro Leaguepedia)
+   - stesso pattern visivo di #tournament-mode-open/#tournament-status
+   (bottone colorato quando attivo + barra di stato sotto la toolbar), ambra
+   invece di verde per distinguerla a colpo d'occhio da "modalita' torneo"
+   (verde = connesso a una draft VERA, ambra = allenamento/pratica). */
+#training-mode-open.training-active {
+  box-shadow: var(--nm-in-sm), inset 0 0 0 1px rgba(201, 133, 47, 0.55);
+  color: #e0a353;
+}
+
+#training-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  --nm-surface: var(--nm-panel);
+  background: var(--nm-panel);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-out-sm), inset 0 0 0 1px rgba(201, 133, 47, 0.3);
+  padding: 9px 16px;
+  font-size: 12px;
+}
+
+#training-status.hidden {
+  display: none;
+}
+
+#training-step {
+  color: var(--text);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#training-info {
+  color: var(--text-dim);
+}
+
+#training-stop {
+  margin-left: auto;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  padding: 4px 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+#training-stop:hover {
+  color: var(--sky-light);
+  box-shadow: var(--nm-out);
+}
+
+#training-stop:active {
+  box-shadow: var(--nm-in-sm);
+}
+
+#training-sync-status {
+  font-size: 12px;
+  color: var(--text-dim);
+  flex: 1;
+}
+
+#training-start-status {
+  font-size: 12px;
+  color: #e08080;
+  min-height: 14px;
+}
+
+#tournament-step {
+  color: var(--text);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#tournament-timer {
+  color: var(--text-dim);
+}
+
+#tournament-next-game {
+  margin-left: auto;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  padding: 4px 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+#tournament-next-game:hover {
+  color: var(--sky-light);
+  box-shadow: var(--nm-out);
+}
+
+#tournament-next-game:active,
+#tournament-disconnect:active {
+  box-shadow: var(--nm-in-sm);
+}
+
+#tournament-disconnect {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  padding: 4px 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+#tournament-disconnect:hover {
+  color: var(--sky-light);
+  box-shadow: var(--nm-out);
+}
+
+/* Il selettore DEVE includere anche .modal-content (invece del solo
+   .tournament-modal-content che c'era prima): questi elementi hanno
+   entrambe le classi, e `.modal-content` piu' in basso in questo file
+   (~riga 2230) dichiara a sua volta width/height. A parita' di specificita'
+   (una classe ciascuno) vince l'ULTIMA regola del file, quindi queste due
+   righe venivano semplicemente ignorate e i modali "Modalita' torneo"/
+   "Modalita' training" si aprivano a 1150x865 (misurato) invece dei
+   440px/auto voluti - contenuto raccolto in cima e due terzi di modale
+   vuoti sotto. Bug preesistente trovato 2026-09-05, verificato identico
+   con e senza il foglio del tema. Con due classi la specificita' sale a
+   (0,2,0) e batte .modal-content a prescindere dall'ordine. */
+.modal-content.tournament-modal-content {
+  /* 92vw diviso per lo zoom: vedi la nota sul blocco dello zoom. */
+  width: min(440px, calc(92vw / 1.5));
+  height: auto;
+  /* Questi due modali sono gli unici ad altezza AUTO, quindi non avevano
+     nessun tetto: prima non serviva (440x445 il piu' alto), col +50%
+     arrivano a ~670px e su una finestra bassa uscirebbero dal viewport -
+     e .modal-overlay centra con flex, quindi a traboccare sarebbe anche il
+     BORDO SUPERIORE, con la X di chiusura fuori schermo. Il tetto lascia
+     tutto invariato finche' c'e' spazio e fa scorrere il contenuto quando
+     non ce n'e'. */
+  max-height: calc(92vh / 1.5);
+  overflow-y: auto;
+}
+
+.tournament-warning {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-in-sm);
+  padding: 11px 14px;
+}
+
+/* Disabilitato = piatto, vedi la nota su .pool-import button:disabled. */
+#training-mode-open:disabled,
+#tournament-mode-open:disabled {
+  cursor: default;
+  box-shadow: none;
+  background: var(--nm-surface-lo);
+  color: var(--nm-text-disabled);
+  opacity: 1;
+}
+
+/* Riga ban + bottone "salva questa comp" - richiesta esplicita dell'utente
+   2026-08-26: niente piu' un modal/griglia separati per "modalita' training"
+   (scartata, vedi note di progetto) - si salva direttamente lo stato GIA'
+   piazzato in teams.left/right, stesso principio "non fare le cose due
+   volte".
+   TERZO tentativo di layout per questo bottone, stesso giorno: 1) flex-row
+   condiviso con #ban-slots -> rompeva justify-content:flex-end sul lato
+   red. 2) position:absolute; bottom:0 -> rotto da un'interazione
+   imprevedibile con "zoom" (vedi .panel-body sopra), il bottone finiva
+   troppo in alto. 3) riga separata sotto (flex-column) -> l'utente ha fatto
+   notare che "sotto" senza un limite fisso non e' un vero ancoraggio, voleva
+   la STESSA riga dei ban, solo allineato in basso con loro.
+   Soluzione finale: `.ban-row` resta flex-ROW (come il tentativo 1), ma
+   `#ban-slots`/`#ban-slots-2` prendono `flex:1` (vedi regola .ban-slots
+   sopra) invece di essere lasciati a larghezza naturale - COSI' restano
+   "pieni" quanto prima (il loro justify-content interno decide ancora dove
+   vanno i 5 ban, MAI rotto) pur condividendo la riga col bottone.
+   `align-items: flex-end` sul contenitore DOVREBBE bastare per allineare le
+   basi - MA "zoom" rompe pure questo (verificato misurando: il bottone
+   risultava allineato come flex-START anche con align-items:flex-end
+   dichiarato e confermato via getComputedStyle - stesso ambiente, stessa
+   causa "zoom" del tentativo 2, manifestazione diversa). Fix definitivo:
+   bottone reso ESATTAMENTE alto quanto `.ban-slot` (32px, non 28px) - con
+   ENTRAMBI gli elementi della stessa identica altezza, qualunque align-items
+   (anche uno calcolato male da zoom) produce lo stesso risultato visivo,
+   perche' non c'e' nessuna differenza di altezza da compensare. Margine
+   "margin-top" che prima stava su .ban-slots (per staccarlo dall'etichetta
+   "Ban" sopra) spostato qui su .ban-row: doveva stare sul CONTENITORE della
+   riga, non su un singolo figlio - un margine asimmetrico tra i due figli
+   flex e' probabilmente proprio cio' che confondeva l'allineamento sotto
+   zoom. La specularita' (bottone a destra sul blue, a sinistra sul red)
+   viene dall'ORDINE nell'HTML - vedi index.html, sul lato red il bottone e'
+   il PRIMO figlio, non il secondo. */
+.ban-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.save-draft-open {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  /* .icon-btn (l'altra classe di questo bottone) porta margin-bottom:8px,
+     pensato per icone impilate verticalmente altrove - qui basta e avanza
+     per staccare visibilmente il bottone dal fondo dei ban anche con
+     align-items:flex-end. Azzerato: qui il bottone e' dentro un flex-row
+     insieme a #ban-slots, deve stare alla pari, non spostato in su. */
+  margin-bottom: 0;
+  border-radius: 10px;
+  border: none;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-out-xs);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.save-draft-open:disabled {
+  cursor: default;
+  box-shadow: none;
+  background: var(--nm-surface-lo);
+  color: var(--nm-text-disabled);
+  opacity: 1;
+}
+
+/* position:FIXED (non absolute) e dichiarati fuori da #sidebar/#sidebar-right
+   nell'HTML - quei contenitori hanno overflow-y:auto, che tronca/clippa
+   qualunque discendente assoluto provi a "uscire" dai loro bordi (bug reale
+   segnalato dall'utente: il popover si tagliava a sinistra e finiva dietro
+   alla griglia campioni). top/left calcolati via JS dalla posizione reale
+   del bottone cliccato (vedi openSaveDraftPopover in app.js), cosi' il
+   popover e' SEMPRE sopra a tutto il resto, indipendentemente da dove vive
+   nel DOM. z-index piu' alto di .counter-role-popover per sicurezza, dato
+   che qui puo' capitare di aprirlo mentre la griglia/altri popover sono
+   visibili. */
+.save-draft-popover {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  gap: 4px;
+  --nm-surface: var(--nm-panel);
+  background: var(--nm-panel);
+  border: none;
+  border-radius: 16px;
+  padding: 8px;
+  box-shadow: var(--nm-out), 0 10px 24px var(--nm-drop);
+}
+
+.save-draft-popover.hidden {
+  display: none;
+}
+
+.save-draft-popover input[type="text"] {
+  width: 160px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-in);
+  padding: 6px 8px;
+  color: var(--text);
+  font-size: 12px;
+  transition: box-shadow 0.16s ease;
+}
+
+.save-draft-popover input[type="text"]:focus {
+  outline: none;
+  box-shadow: var(--nm-in), inset 0 0 0 1px var(--nm-ring-faint);
+  color: var(--sky-light);
+}
+
+.save-draft-popover button {
+  flex: none;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  color: var(--sky-mid);
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.save-draft-popover button:hover {
+  box-shadow: var(--nm-out);
+  color: var(--sky-light);
+}
+
+.save-draft-popover button:active {
+  box-shadow: var(--nm-in-sm);
+}
+
+/* Stessa correzione di specificita' spiegata su
+   .modal-content.tournament-modal-content qui sopra, stesso identico bug:
+   anche questo modale si apriva a 1150x865 invece dei 640x600 voluti. */
+.modal-content.saved-drafts-modal-content {
+  /* Limiti divisi per lo zoom, vedi la nota sul blocco dello zoom. */
+  width: min(640px, calc(92vw / 1.5));
+  height: min(600px, calc(88vh / 1.5));
+}
+
+#saved-drafts-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.saved-draft-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-out-xs);
+  padding: 8px 10px;
+}
+
+.saved-draft-entry .saved-draft-icons {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.saved-draft-entry .saved-draft-icons img {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+}
+
+.saved-draft-entry .saved-draft-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.saved-draft-entry .icon-btn {
+  flex: none;
+}
+
+#saved-drafts-list .empty-label {
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.fearless-pool {
+  margin-top: 8px;
+}
+
+.fearless-pool.hidden {
+  display: none;
+}
+
+.fearless-pool-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.fearless-pool-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.fearless-pool-icon {
+  width: 22px;
+  height: 22px;
+  /* In coppia col clip-path piu' sotto, vedi la nota su .ban-slot. */
+  border-radius: 7px;
+  opacity: 0.85;
+}
+
+/* Righe di scelta team/lato del modale torneo (connessione in due tempi,
+   2026-09-05): i bottoni sono generati da app.js, quindi qui serve solo il
+   contenitore. wrap perche' i nomi dei team arrivano dal sito e possono
+   essere lunghi a piacere. */
+.tournament-choice-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.tournament-join-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 5px;
+}
+
+#tournament-join-choices.hidden {
+  display: none;
+}
+
+/* Stile COMPLETO, non ereditato dal contenitore. Fino al 2026-09-05 questi
+   bottoni stavano dentro .row-with-buttons e prendevano il loro aspetto
+   dalla regola `.row-with-buttons button`: questa classe portava solo
+   `flex: 1`. Spostandoli nelle nuove righe di scelta team/lato (connessione
+   in due tempi) sono rimasti bottoni NUDI di sistema - fondo bianco, testo
+   nero, spigoli vivi in mezzo al tema (segnalato dall'utente con
+   screenshot). Ora la classe si regge da sola ovunque la si usi. */
+.tournament-side-btn {
+  /* min-width: con flex-wrap, `flex: 1` da solo lascerebbe schiacciare un
+     nome di team lungo fino a renderlo illeggibile. */
+  flex: 1 1 auto;
+  min-width: 110px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  color: var(--sky-mid);
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.tournament-side-btn:hover:not(:disabled) {
+  box-shadow: var(--nm-out);
+  color: var(--sky-light);
+}
+
+.tournament-side-btn:active:not(:disabled) {
+  box-shadow: var(--nm-in-sm);
+}
+
+.tournament-side-btn.active {
+  color: var(--sky-light);
+  box-shadow: var(--nm-in-sm), inset 0 0 0 1px var(--nm-ring);
+}
+
+/* Lato gia' occupato dall'altro team: piatto e non cliccabile, stesso
+   trattamento di ogni altro controllo disabilitato del tema. */
+.tournament-side-btn:disabled {
+  box-shadow: none;
+  background: var(--nm-surface-lo);
+  color: var(--nm-text-disabled);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+#tournament-connect-status {
+  font-size: 12px;
+  color: #e08080;
+  min-height: 14px;
+}
+
+.role-filter {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-out-xs);
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.role-filter img {
+  width: 24px;
+  height: 24px;
+}
+
+.role-filter.active {
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in-xs), inset 0 0 0 1px var(--nm-ring);
+}
+
+#champion-grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--icon-scale, 2) * 56px), 1fr));
+  /* Piu' largo di prima (8px): con 170 card affiancate, ognuna con la sua
+     ombra, un gap stretto le fa sovrapporre e il risultato legge come
+     rumore invece che come rilievo. Stesso motivo del padding qui sotto,
+     che evita il taglio delle ombre sul bordo dell'area che scorre. */
+  gap: 14px;
+  padding: 4px;
+  align-content: start;
+}
+
+#icon-size-slider,
+#sidebar-size-slider {
+  width: 90px;
+  cursor: pointer;
+  /* Binario scavato + pomello estruso, stessa lettura degli interruttori.
+     accent-color (che bastava col tema precedente) non permette di dare al
+     cursore un rilievo proprio, quindi -webkit-appearance:none e le due
+     parti ridisegnate a mano. Verificato che resti afferrabile col mouse
+     vero, non solo via evento sintetico. */
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in-xs);
+}
+
+#icon-size-slider::-webkit-slider-thumb,
+#sidebar-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--sky-mid);
+  box-shadow: var(--nm-out-xs);
+  cursor: pointer;
+}
+
+#icon-size-slider::-webkit-slider-thumb:hover,
+#sidebar-size-slider::-webkit-slider-thumb:hover {
+  background: var(--sky-light);
+}
+
+/* Bottone di conferma "modalita' torneo" - posizione familiare (centrata
+   sotto la griglia campioni, come il bottone azione di drafter.lol stesso).
+   Sempre visibile mentre connessi, disabilitato finche' non c'e' una
+   selezione in sospeso da bloccare (vedi updateTournamentConfirmButton). */
+#tournament-confirm-row {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 2px;
+}
+
+#tournament-confirm-row.hidden {
+  display: none;
+}
+
+#tournament-confirm {
+  min-width: 220px;
+  background: linear-gradient(145deg, #4b559f, #3b4380);
+  border: none;
+  border-radius: 16px;
+  color: #e2ecfb;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 24px;
+  cursor: pointer;
+  box-shadow: var(--nm-out), 0 0 18px rgba(67, 76, 146, 0.35);
+}
+
+#tournament-confirm:active {
+  background: linear-gradient(145deg, #3b4380, #4b559f);
+  box-shadow: var(--nm-in-sm);
+}
+
+#tournament-confirm:disabled {
+  cursor: default;
+  background: var(--nm-surface-lo);
+  box-shadow: none;
+  color: var(--nm-text-disabled);
+  opacity: 1;
+}
+
+/* "Valuta la draft" per la modalita' torneo (richiesto esplicitamente
+   dall'utente 2026-08-26) - bottone dedicato SEPARATO da #tournament-confirm
+   (quello resta specchio 1:1 del bottone vero del sito, sovraccaricarlo
+   ulteriormente sarebbe stato fragile - vedi draft_evaluation.py). Stesso
+   schema/colore di #tournament-confirm per continuita' visiva col resto
+   della modalita' torneo. */
+#tournament-evaluate-row {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 2px;
+}
+
+#tournament-evaluate-row.hidden {
+  display: none;
+}
+
+#tournament-evaluate {
+  min-width: 220px;
+  background: linear-gradient(145deg, #4b559f, #3b4380);
+  border: none;
+  border-radius: 16px;
+  color: #e2ecfb;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 24px;
+  cursor: pointer;
+  box-shadow: var(--nm-out), 0 0 18px rgba(67, 76, 146, 0.35);
+}
+
+#tournament-evaluate:active {
+  background: linear-gradient(145deg, #3b4380, #4b559f);
+  box-shadow: var(--nm-in-sm);
+}
+
+#tournament-evaluate:disabled {
+  cursor: default;
+  background: var(--nm-surface-lo);
+  box-shadow: none;
+  color: var(--nm-text-disabled);
+  opacity: 1;
+}
+
+/* Bottone "Conferma selezione" della modalita' training - stesso schema di
+   #tournament-confirm (posizione/dimensione), colore ambra invece di blu per
+   restare coerente col resto della modalita' training. Richiesto
+   esplicitamente dall'utente (2026-08-26): un click in griglia sceglie
+   soltanto (vedi .training-pending sotto), serve una conferma esplicita per
+   evitare di sbagliare campione con un click involontario - stesso principio
+   gia' usato da drafter.lol stesso. */
+#training-confirm-row {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 2px;
+}
+
+#training-confirm-row.hidden {
+  display: none;
+}
+
+#training-confirm {
+  min-width: 220px;
+  background: linear-gradient(145deg, #553714, #3f2a0d);
+  border: none;
+  border-radius: 16px;
+  color: #e8b878;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 24px;
+  cursor: pointer;
+  box-shadow: var(--nm-out), 0 0 18px rgba(201, 133, 47, 0.28);
+}
+
+#training-confirm:active {
+  background: linear-gradient(145deg, #3f2a0d, #553714);
+  box-shadow: var(--nm-in-sm);
+}
+
+#training-confirm:disabled {
+  cursor: default;
+  background: var(--nm-surface-lo);
+  box-shadow: none;
+  color: var(--nm-text-disabled);
+  opacity: 1;
+}
+
+/* Card selezionata-ma-non-confermata in griglia durante la modalita'
+   training - segnale visivo che quello e' il campione "in sospeso" finche'
+   non si preme Conferma. */
+.champion-card.training-pending {
+  outline: 2px solid #c9852f;
+  outline-offset: -2px;
+}
+
+/* Bottone "ripeti da qui" (rewind) su ognuno dei PROPRI pick gia' fatti in
+   modalita' training - richiesto esplicitamente dall'utente (2026-08-26) per
+   poter riprovare un pick diverso dallo stesso punto e vedere se il bot
+   reagisce in modo diverso. Stesso pattern di .slot-counter-btn (gia'
+   esistente): un altro figlio flex dentro .team-slot (che e' display:flex),
+   NON position:absolute - lo slot ha gia' l'icona campione a sinistra, un
+   overlay assoluto ci finirebbe sopra invece di stare a fianco. */
+.slot-rewind-btn {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 10px;
+  border: none;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-out-xs);
+  color: #e0a353;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.slot-rewind-btn:hover {
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in-xs), inset 0 0 6px rgba(201, 133, 47, 0.4);
+}
+
+/* Riepilogo ruoli a fine draft ("in che corsia va ognuno dei 5 pick") -
+   richiesto esplicitamente dall'utente (2026-08-26) per poter verificare che
+   il bot copra davvero 5 ruoli distinti (il suo punteggio pick e' PURA
+   sinergia/counter, nessun vincolo di ruolo durante la scelta - vedi
+   assign_roles in training_bot.py). */
+#training-role-summary {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+#training-role-summary.hidden {
+  display: none;
+}
+
+.training-role-team {
+  --nm-surface: var(--nm-panel);
+  background: var(--nm-panel);
+  border: none;
+  border-radius: 18px;
+  box-shadow: var(--nm-out);
+  padding: 12px 16px;
+  min-width: 220px;
+}
+
+.training-role-team h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.training-role-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.training-role-row img.training-role-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.8;
+}
+
+.training-role-row img.training-role-champ-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+}
+
+.training-role-row .training-role-warning {
+  color: #e0b83d;
+  font-size: 11px;
+}
+
+.training-role-team .training-role-not-covered {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #e0b83d;
+}
+
+/* Riga di ruolo TRASCINABILE (solo lato trainee, dopo la fine draft) -
+   richiesto esplicitamente dall'utente (2026-08-26): vuole decidere lui
+   quale dei suoi pick va in quale corsia, invece del solo suggerimento
+   automatico (letto ma non modificabile, quello resta per il lato bot).
+   Stesso meccanismo di drag (arrayMove) gia' in uso per
+   .role-confirm-slot in modalita' torneo, qui pero' sulle righe compatte
+   gia' esistenti invece di un box separato - la colonna Blue/Red resta
+   visivamente identica in entrambi i casi (letta o trascinabile). */
+.training-role-row-editable {
+  cursor: grab;
+  border-radius: 10px;
+  border: none;
+  box-shadow: var(--nm-out-xs);
+}
+
+.training-role-row-editable.drag-over {
+  box-shadow: var(--nm-in-xs), inset 0 0 10px rgba(201, 133, 47, 0.45);
+}
+
+/* Ruoli NEMICI in modalita' torneo (richiesto esplicitamente dall'utente
+   2026-08-26: "il coach 'cambia' l'ordine dei pick nemici in modo che
+   combaciano con le comunicazioni del team avversario") - stesso
+   meccanismo/classi di .training-role-row(-editable) sopra (riuso diretto,
+   vedi renderTournamentEnemyRoles in app.js), solo il contenitore esterno e'
+   nuovo e il feedback di drag-over e' blu invece di ambra per restare
+   coerente col resto della modalita' torneo (ambra = training). Nessun
+   bottone "conferma" qui (a differenza di .training-role-confirm-btn): non
+   c'e' nulla da salvare lato server, l'ordine locale viene passato
+   direttamente ad ogni click su "Valuta la draft". */
+/* #tournament-own-roles (2026-08-30, richiesto esplicitamente dall'utente
+   dopo aver notato che diversi team avversari non confermano i ruoli
+   nell'ordine giusto sul sito: "voglio poterli impostare io personalmente
+   ... i pick per entrambe le squadre") condivide queste stesse regole col
+   pannello nemico - stesso identico meccanismo, stesso stile, nessuna
+   differenza visiva richiesta fra i due lati. */
+/* Contenitore dei due pannelli ruoli nostri/nemici - richiesto
+   esplicitamente dall'utente 2026-09-04 (screenshot): prima impilati in
+   verticale (nostri sopra, nemici sotto), ora affiancati in orizzontale.
+   flex-wrap:wrap come rete di sicurezza se lo spazio disponibile si
+   restringe (finestra piu' stretta) - tornano a impilarsi da soli invece
+   di tagliarsi/uscire dal contenitore, nessun media query dedicato
+   necessario. */
+#tournament-roles-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+#tournament-own-roles,
+#tournament-enemy-roles {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0;
+}
+
+#tournament-own-roles.hidden,
+#tournament-enemy-roles.hidden {
+  display: none;
+}
+
+#tournament-own-roles .training-role-row-editable.drag-over,
+#tournament-enemy-roles .training-role-row-editable.drag-over {
+  border-color: var(--sky-light);
+  background: rgba(62, 168, 216, 0.12);
+}
+
+/* Trasparenza sulla provenienza dell'ordine ruoli nostri/nemici mostrato
+   (richiesto implicitamente dall'utente 2026-08-26: "coprire entrambi i
+   casi" - automatico E correggibile - il coach deve poter distinguerli a
+   colpo d'occhio) - vedi ROLE_SOURCE_LABELS in app.js. */
+#tournament-own-roles .training-role-source-hint,
+#tournament-enemy-roles .training-role-source-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.training-role-confirm-btn {
+  margin-top: 8px;
+  width: 100%;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  color: #e0a353;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.training-role-saved-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #4caf6d;
+}
+
+/* "Valuta la draft" (richiesto esplicitamente dall'utente 2026-08-26) -
+   curve winrate/durata-partita aggregate blu/rosso/verde, vedi
+   driftdraft/draft_evaluation.py per il design. Grafico disegnato a mano in
+   SVG (buildTrainingEvaluationChartSvg), stesso principio di
+   #counter-diagram gia' esistente - niente libreria grafici esterna. */
+#training-evaluation,
+#tournament-evaluation {
+  --nm-surface: var(--nm-panel);
+  background: var(--nm-panel);
+  border: none;
+  border-radius: 18px;
+  box-shadow: var(--nm-out);
+  padding: 12px 16px 8px;
+  margin: 6px 0;
+}
+
+#training-evaluation.hidden,
+#tournament-evaluation.hidden {
+  display: none;
+}
+
+#training-evaluation h3,
+#tournament-evaluation h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.training-eval-loading {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 8px 0;
+}
+
+.training-eval-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.training-eval-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.training-eval-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: #4caf6d;
+}
+
+.training-eval-swatch.training-eval-swatch-dashed {
+  background: none;
+  border-top: 1.5px dashed #3ea8d8;
+  height: 0;
+}
+
+.training-eval-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.training-eval-note {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  /* border-color arriva da .push/.danger qui sotto (currentColor implicito):
+     tenuto come bordo vero e non come ombra, perche' qui il colore E' il
+     messaggio (verde = spingi, rosso = pericolo) e deve restare netto. */
+  border: 1px solid;
+  box-shadow: var(--nm-out-xs);
+}
+
+.training-eval-note.push {
+  color: #4caf6d;
+  border-color: #4caf6d;
+  background: rgba(76, 175, 109, 0.1);
+}
+
+.training-eval-note.danger {
+  color: #d64545;
+  border-color: #d64545;
+  background: rgba(214, 69, 69, 0.1);
+}
+
+.training-eval-notes-empty {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+.training-eval-errors {
+  font-size: 11px;
+  color: #e0b83d;
+  margin-top: 6px;
+}
+
+/* "Testa a testa per corsia" (richiesto esplicitamente dall'utente
+   2026-08-26, con uno schizzo a mano, poi affinato con un secondo schizzo:
+   "un blocco unico con le 5 corsie affiancate, grafici piu' piccoli - non
+   servono enormi per capire come scalano i campioni a colpo d'occhio" - vedi
+   buildLaneFaceoffSection in app.js) - 5 colonne strette affiancate, non
+   piu' 5 righe impilate: ciascuna e' un mini blocco verticale autonomo
+   (icona ruolo, icona nostro campione, mini-grafico, icona campione
+   nemico). Riusa .training-eval-swatch (gia' generico) per la legenda. */
+.lane-faceoff-section {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.lane-faceoff-section h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lane-faceoff-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.lane-faceoff-cols {
+  display: flex;
+  gap: 6px;
+}
+
+.lane-faceoff-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.lane-faceoff-role-icon {
+  width: 12px;
+  height: 12px;
+  opacity: 0.7;
+}
+
+.lane-faceoff-col-champ {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  -webkit-user-drag: none;
+}
+
+/* Role confirmation (dopo i 20 pick/ban) - sostituisce #tournament-confirm-row
+   per la durata di questa fase (mai visibili insieme, vedi
+   updateRoleConfirmPanel in app.js). Stessa posizione/larghezza del bottone
+   che rimpiazza, per continuita' visiva. */
+#role-confirm-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0 10px;
+  --nm-surface: var(--nm-panel);
+  background: var(--nm-panel);
+  border: none;
+  border-radius: 18px;
+  box-shadow: var(--nm-out);
+}
+
+#role-confirm-panel.hidden {
+  display: none;
+}
+
+#role-confirm-header {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+#role-confirm-slots {
+  display: flex;
+  gap: 8px;
+}
+
+.role-confirm-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 92px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-xs);
+  padding: 8px 6px;
+  cursor: grab;
+}
+
+.role-confirm-slot:active {
+  cursor: grabbing;
+  box-shadow: var(--nm-in-xs);
+}
+
+.role-confirm-slot.drag-over {
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in-xs), inset 0 0 10px var(--nm-glow);
+}
+
+.role-confirm-lane-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
+.role-confirm-slot img {
+  width: 40px;
+  height: 40px;
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+.role-confirm-champ-name {
+  font-size: 11px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+#role-confirm-button {
+  min-width: 220px;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  color: var(--sky-mid);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 24px;
+  cursor: pointer;
+}
+
+#role-confirm-button:disabled {
+  cursor: default;
+  background: var(--nm-surface-lo);
+  box-shadow: none;
+  color: var(--nm-text-disabled);
+  opacity: 1;
+}
+
+#role-confirm-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  min-height: 14px;
+}
+
+.champion-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  padding: 3px;
+  cursor: grab;
+  /* Estrusione tenuta PICCOLA apposta: e' l'elemento piu' ripetuto dell'app.
+     Nessun background qui - e' il layer 1 del bordo comp, vedi piu' sotto. */
+  box-shadow: var(--nm-out-xs);
+  transition: box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.champion-card:hover {
+  box-shadow: var(--nm-out-sm);
+  transform: translateY(-2px);
+}
+
+.champion-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  display: block;
+  background: var(--nm-surface);
+  /* Senza questo, Chromium avvia un drag NATIVO dell'immagine (offre
+     Files/text-uri-list oltre al nostro text/plain custom) invece di un
+     drag interno alla pagina - funziona comunque in un browser vero
+     (Chrome resta sia sorgente che target), ma si perde silenziosamente
+     nell'app buildata: WebView2 incorporato in una finestra host
+     (pywebview) non completa la sessione di drag nativa a livello di
+     sistema operativo, quindi dopo "dragstart" non arriva mai piu' nulla
+     (ne' dragover ne' drop) - verificato 2026-08-17 collegando Playwright
+     via CDP alla vera finestra WebView2 (porta di debug remoto
+     REMOTE_DEBUGGING_PORT di pywebview) e simulando un drag col mouse
+     vero: senza questa riga restava fermo a "dragstart", con questa riga
+     arriva regolarmente fino a "drop" e lo stato si aggiorna. */
+  -webkit-user-drag: none;
+}
+
+/* Bordo colorato per comp, disegnato via CODICE invece che incorporato nei
+   pixel dell'icona (richiesto esplicitamente dall'utente 2026-08-27,
+   insieme al passaggio alle icone "pulite" di Data Dragon - vedi
+   scripts/sync_ddragon_icons.py e applyCompBorderVar in app.js): cambia
+   SUBITO se il coach modifica i tag di un campione in app (prima
+   impossibile, il colore era fisso nel file immagine).
+
+   Un campione in piu' comp divide il PERIMETRO in spicchi, uno per comp -
+   NON anelli concentrici impilati (prima versione, bocciata subito
+   dall'utente: "non si capisce praticamente niente in questo modo...
+   vorrei che segui lo stile di come le avevo fatte io" - lo stile
+   originale, vedi assets/icons_bordered_backup_2026-08-27/, divideva
+   davvero il bordo in archi uguali, non lo ripeteva a strati). Un bordo
+   vero (border-width/color/image), non piu' un box-shadow: un solo colore
+   usa border-color normale (--comp-border-image resta "none"), 2+ colori
+   passano a border-image con un conic-gradient a spicchi uguali (calcolato
+   in JS, vedi champCompBorderVars) - border-image IGNORA border-radius per
+   sua natura (angoli sempre netti). All'epoca giudicato coerente con lo
+   stile originale (anch'esso ad angoli netti) - **cambiato 2026-08-31 su
+   richiesta esplicita dell'utente** (screenshot di confronto: bordo
+   singolo tondeggiante vs bordo multiplo "quadrato in tutto e per tutto",
+   "vorrei rendere il tutto tondeggiante, in quanto è lo stile attuale
+   dell'app") - vedi le regole subito sotto per il fix. */
+.tier-champ-wrap,
+.ban-slot.filled,
+.saved-draft-icon,
+.fearless-pool-icon,
+.role-confirm-champ-icon,
+.training-role-champ-icon,
+.lane-faceoff-col-champ {
+  border-style: solid;
+  border-width: var(--comp-border-width, 0px);
+  border-color: var(--comp-border-color, transparent);
+  border-image-source: var(--comp-border-image, none);
+  border-image-slice: 1;
+}
+
+/* Fix angoli netti (2026-08-31) - clip-path (raggruppato per raggio, stesso
+   valore gia' usato dal border-radius proprio di ciascun elemento): taglia
+   l'INTERO elemento (bordo compreso) a un rettangolo arrotondato DOPO che
+   border-image ha gia' disegnato i suoi angoli netti - a differenza di
+   border-radius, funziona anche con border-image. Sicuro qui perche'
+   nessuno di questi elementi ha un figlio che deve poter "uscire" dal
+   proprio riquadro ne' un box-shadow esteso oltre il bordo (verificato uno
+   per uno) - clip-path taglierebbe via anche quelli, non solo gli angoli
+   del bordo. .tier-champ-wrap/.saved-draft-icon/.role-confirm-champ-icon
+   deliberatamente ESCLUSI: non hanno mai avuto un border-radius proprio
+   (angoli gia' netti prima ancora del bordo comp), un clip-path qui
+   introdurrebbe un arrotondamento nuovo mai richiesto. .champion-card/
+   .team-slot.filled invece NON usano clip-path (conflitto reale: glow
+   suggeriti esteso oltre il bordo per il primo, popover counter
+   parzialmente fuori dal riquadro per il secondo - vedi la tecnica
+   diversa usata per loro qui sotto). */
+.ban-slot.filled {
+  clip-path: inset(0 round 9px);
+}
+
+/* Restato a 5px: .lane-faceoff-col-champ ha ancora il suo border-radius di
+   5px, i due valori vanno sempre uguali fra loro (non uguali a quelli degli
+   altri elementi). */
+.lane-faceoff-col-champ {
+  clip-path: inset(0 round 5px);
+}
+
+.fearless-pool-icon,
+.training-role-champ-icon {
+  clip-path: inset(0 round 7px);
+}
+
+/* .champion-card/.team-slot.filled - storia di 3 tentativi falliti prima
+   di questo (tutti con screenshot reali dell'utente a documentarli, vedi
+   sotto), quindi commento lungo apposta per non ripetere gli stessi
+   errori in futuro:
+
+   Tentativo 1, mask-composite (anello ritagliato via due maschere content-
+   box/border-box sottratte): l'angolo INTERNO della maschera non veniva
+   arrotondato allo stesso modo di quello esterno su questo motore di
+   rendering - "hai aumentato il problema", angolo ne' pulito ne' quadrato.
+
+   Tentativo 2, ::after con z-index:-1 dietro al contenuto vero (bordo
+   pieno, nascosto dal contenuto sopra invece che ritagliato): risolveva
+   gli angoli, ma inset:0 posiziona un discendente position:absolute
+   rispetto al PADDING-BOX dell'antenato (bordo escluso, per specifica
+   CSS) - il vero bordo sottostante restava quindi ESPOSTO per intero,
+   l'overlay si vedeva solo come fetta piu' interna: "sia il bordo rosso
+   che il sottobordo blu-rosso" (screenshot, Lillia). Corretto con
+   inset:calc(-1 * larghezza) per allargare l'overlay fino al vero
+   border-box.
+
+   Tentativo 3 (col fix inset applicato): angoli finalmente puliti E un
+   solo anello, MA lo spessore visibile per il multi-comp risultava
+   MAGGIORE del mono-comp ("in caso di bordo con colore singolo, è più
+   fino... vorrei renderli uguali") - causa: l'overlay, non ritagliato
+   (pieno, coperto dal contenuto sopra), restava visibile anche nel
+   padding INTERNO proprio della card (3px, slegato dal bordo comp) fino a
+   dove iniziava davvero il contenuto opaco (l'icona) - il mono-comp
+   invece disegna SOLO nella fascia del vero border-width, senza toccare
+   quel padding, quindi risultava piu' sottile.
+
+   Soluzione finale (questa): NIENTE ::after/z-index/position - un
+   background a 2 layer sull'elemento vero stesso, tecnica standard per
+   "bordo sfumato con angoli arrotondati" (background-clip, A DIFFERENZA
+   di mask-clip, arrotonda SEMPRE correttamente anche il lato interno,
+   risolve il tentativo 1; nessuna z-index/stacking context da sbagliare,
+   risolve il tentativo 2). Layer 1 (sopra, image:linear-gradient a colore
+   solido, clip:padding-box) coprae TUTTO da padding-box in poi - ferma
+   quindi il layer 2 esattamente al vero spessore del bordo, risolvendo
+   anche il tentativo 3. Layer 2 (sotto, il vero conic-gradient o - da
+   2026-08-31 - anche il colore mono-comp espresso come gradient degenere
+   invece di "none", vedi champCompBorderVars in app.js - PROPRIO per
+   poter usare questa STESSA regola, senza rami diversi, per entrambi i
+   casi e garantire lo stesso spessore per costruzione) clip:border-box,
+   visibile SOLO nella fascia border-width non coperta dal layer 1. Il
+   vero border-color/width restano solo per riservare lo spazio nel box
+   model (border-color:transparent, il disegno vero e' tutto nei 2 layer
+   sopra). */
+.champion-card,
+.team-slot.filled,
+.suggestion-icon-wrap {
+  border-style: solid;
+  border-width: var(--comp-border-width, 0px);
+  border-color: transparent;
+  /* background-image (longhand) NON accetta le parole chiave padding-box/
+     border-box al suo interno - solo la shorthand "background" le
+     accetta li' dentro. Scritta cosi' la prima volta, la dichiarazione
+     era CSS non valido e veniva scartata per intero dal browser (bug
+     reale: niente errori visibili, semplicemente "background-image: none"
+     invisibile in getComputedStyle - trovato SOLO controllando i valori
+     calcolati, non a occhio). background-clip separato, 2 valori in
+     ordine corrispondente ai 2 layer di background-image, e' la sintassi
+     corretta per il longhand. */
+  background-image:
+    linear-gradient(var(--nm-surface), var(--nm-surface)),
+    var(--comp-border-image, none);
+  background-clip: padding-box, border-box;
+  /* SENZA questo, background-origin resta al suo default (padding-box)
+     per ENTRAMBI i layer - il layer 2 (il vero conic-gradient) verrebbe
+     quindi CALCOLATO/dimensionato sul padding-box (piu' piccolo) ma
+     ritagliato per essere visibile fino al border-box (piu' grande);
+     dato che background-repeat di default e' "repeat", quella forma piu'
+     piccola si RIPETE/affianca per riempire l'area piu' grande visibile
+     - risultato un bordo a colori alternati "rosso-blu-rosso-blu-rosso-
+     blu" invece di un unico giro pulito (bug reale segnalato dall'utente
+     con screenshot, Lillia). origin deve combaciare col clip layer per
+     layer perche' il gradiente venga calcolato sulla stessa area in cui
+     e' visibile, una sola volta, senza ripetizioni. */
+  background-origin: padding-box, border-box;
+}
+
+/* Toggle "Bordi colorati" (richiesto esplicitamente dall'utente 2026-08-27:
+   "alcuni coach semplicemente non usano questo sistema... aggiungere
+   un'opzione con cui vedere/non vedere i bordi", vedi #comp-borders-toggle
+   in index.html) - una classe su <body> invece di dover ri-renderizzare
+   ogni singola card quando il coach lo spegne: le custom property restano
+   impostate su ogni elemento (nessun ricalcolo lato JS), questa regola
+   azzera solo lo spessore - un bordo a 0px non disegna nulla a prescindere
+   da colore/gradiente. .champion-card/.team-slot.filled non hanno bisogno
+   di una regola separata qui: a border-width:0 il loro padding-box
+   COINCIDE col border-box, quindi il layer 1 (clip:padding-box, sopra)
+   copre automaticamente anche l'intera area del layer 2 - il gradiente
+   sparisce da solo, nessuna regola aggiuntiva necessaria. */
+body.comp-borders-off .tier-champ-wrap,
+body.comp-borders-off .ban-slot.filled,
+body.comp-borders-off .saved-draft-icon,
+body.comp-borders-off .fearless-pool-icon,
+body.comp-borders-off .role-confirm-champ-icon,
+body.comp-borders-off .training-role-champ-icon,
+body.comp-borders-off .lane-faceoff-col-champ {
+  border-width: 0;
+}
+
+body.comp-borders-off .champion-card,
+body.comp-borders-off .team-slot.filled,
+body.comp-borders-off .suggestion-icon-wrap {
+  border-width: 0;
+}
+
+.champion-card.picked {
+  cursor: not-allowed;
+  /* Affondato: rafforza l'opacita' 0.3 gia' applicata all'immagine sotto. */
+  box-shadow: var(--nm-in-xs);
+  transform: none;
+}
+
+.champion-card.picked:hover {
+  box-shadow: var(--nm-in-xs);
+  transform: none;
+}
+
+/* "Pick suggeriti" in modalita' torneo (richiesto esplicitamente dall'utente
+   2026-08-26: "si illuminano un pochino", poi 2026-08-27: "sono poco
+   appariscenti... dovremmo aumentare il bordo") - reso piu' marcato ora che
+   le icone non hanno piu' un bordo incorporato nei pixel con cui scontrarsi
+   (era il motivo per cui era stato tenuto morbido all'inizio, non piu'
+   valido dopo il passaggio alle icone Data Dragon). Era ORO, colore scelto
+   allora perche' libero da altri significati in questa UI (blu=torneo,
+   ambra=training, verde/rosso=winrate, i colori comp sopra); dal 2026-09-06
+   e' blu o rosso a seconda del LATO, vedi i token --suggest-blue/--suggest-red
+   e i tre stati piu' sotto.
+   NOTA: il box-shadow qui sotto NON sostituisce il bordo-comp (a differenza
+   di quanto diceva questo commento in precedenza) - il bordo-comp e' un
+   background-image (vedi regola .champion-card/.team-slot.filled sopra),
+   il box-shadow si disegna semplicemente ATTORNO a quello, non lo copre.
+   **STATO ATTUALE: resta SOLO l'alone attorno alla card.** La tintura
+   dell'artwork che era stata aggiunta il 2026-09-04
+   (overlay oro + mix-blend-mode:color su un ::after) e' stata RIMOSSA su
+   richiesta dell'utente - "ho deciso, voglio che togli la doratura, ma non
+   il fatto che il bordo si illumina leggermente dalla griglia dei campioni"
+   - dopo che il nuovo pannello "Pick suggeriti" sotto la griglia (vedi
+   #suggestions-panel) ha reso superfluo un segnale cosi' invasivo: li' i
+   suggerimenti sono elencati per punteggio e con la corsia, qui basta
+   ritrovarli a colpo d'occhio nella griglia.
+
+   Perche' quella tintura esisteva, se mai servisse rifarla: un anello
+   dorato accanto a un bordo-comp gia' colorato "non esce moltissimo in
+   risalto" (segnalazione con screenshot). Il primo tentativo (filter:
+   sepia+hue-rotate sull'img) era stato scartato dopo un confronto visivo
+   isolato: hue-rotate ruota la tinta ESISTENTE invece di convergere verso
+   l'oro, quindi su icone fredde (Anivia) virava al verde/teal. La
+   soluzione buona era overlay oro pieno + mix-blend-mode:color (hue e
+   saturazione dall'overlay, luminosita' dall'icona sotto, dettagli
+   dell'artwork tutti visibili), con opacity vicina a 1: sotto ~0.8 il
+   risultato tornava a virare verso il colore originale.
+
+   **DUE LATI dal 2026-09-06** (richiesta dell'utente): lo stesso segnale
+   esiste ora per entrambe le squadre - "sfruttando gli stessi dati possiamo
+   selezionare i pick che potrebbero prendere i nostri avversari, in modo da
+   anticipare ed individuare eventuali pick contesi".
+   Tre stati in tutto, sia in griglia sia sulle card del pannello:
+     .suggest-blue        blu   -> conviene al Blue Side
+     .suggest-red         rosso -> conviene al Red Side
+     .suggest-contested   meta'/meta' -> lo vogliono entrambi
+   Le regole stanno QUI, dopo .champion-card:hover E dopo
+   .suggestion-card:hover, non accanto alle rispettive classi base: la
+   specificita' e' identica (0,2,0) e a parita' vince l'ultima regola del
+   file - separarle rimetterebbe l'alone sotto l'ombra neumorfica del
+   passaggio del mouse. Per lo stesso motivo ogni stato ha la sua regola
+   :hover gemella. */
+.champion-card.suggest-blue,
+.suggestion-card.suggest-blue,
+.champion-card.suggest-blue:hover,
+.suggestion-card.suggest-blue:hover {
+  position: relative;
+  box-shadow:
+    0 0 14px 4px var(--suggest-blue-halo),
+    0 0 0 2px var(--suggest-blue-ring);
+  border-radius: 12px;
+}
+
+.champion-card.suggest-red,
+.suggestion-card.suggest-red,
+.champion-card.suggest-red:hover,
+.suggestion-card.suggest-red:hover {
+  position: relative;
+  box-shadow:
+    0 0 14px 4px var(--suggest-red-halo),
+    0 0 0 2px var(--suggest-red-ring);
+  border-radius: 12px;
+}
+
+/* Pick CONTESO: lo vogliono entrambe le squadre, quindi compare in tutte e
+   due le righe del pannello e la sua cornice e' "divisa blu-rosso
+   (meta'-meta')", com'e' stato chiesto.
+
+   L'alone e' la parte facile: due ombre invece di una, spostate ai lati
+   opposti (-7px/+7px), danno un bagliore blu a sinistra e rosso a destra
+   senza bisogno di altro.
+
+   L'ANELLO netto no: un box-shadow ha un colore solo, non puo' essere
+   sfumato ne' diviso. Serve quindi un ::after - qui pero' senza nessuno dei
+   problemi che avevano fatto scartare quella strada per i bordi comp (vedi
+   la nota lunga piu' sopra), perche' quel bordo doveva CONVIVERE col box
+   model dell'elemento mentre questo anello vive tutto FUORI di esso
+   (inset:-2px), esattamente dove stava gia' il vecchio anello da
+   box-shadow. Non tocca quindi il bordo comp: i due si impilano, comp
+   attaccato alla card e conteso appena piu' fuori.
+
+   La divisione in due meta' e' un gradiente con stop netti (50%/50%,
+   nessuna sfumatura in mezzo: dev'essere leggibile a 40px di card). Il
+   gradiente riempie tutto il rettangolo e la maschera ne lascia visibile
+   solo la cornice: "content-box meno l'area piena" e' il modo standard di
+   ottenere un bordo sfumato con angoli arrotondati - i 2px di padding sono
+   lo spessore dell'anello. Prefisso -webkit- incluso: e' quello che
+   WebView2 usa davvero per mask-composite. */
+.champion-card.suggest-contested,
+.suggestion-card.suggest-contested,
+.champion-card.suggest-contested:hover,
+.suggestion-card.suggest-contested:hover {
+  position: relative;
+  box-shadow:
+    -7px 0 14px 1px var(--suggest-blue-halo),
+    7px 0 14px 1px var(--suggest-red-halo);
+  border-radius: 12px;
+}
+
+.champion-card.suggest-contested::after,
+.suggestion-card.suggest-contested::after {
+  content: "";
+  position: absolute;
+  /* inset e radius vanno cambiati in COPPIA: il raggio dell'anello e' quello
+     della card (12px) piu' quanto sporge in fuori (2px). */
+  inset: -2px;
+  border-radius: 14px;
+  padding: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--suggest-blue) 0 50%,
+    var(--suggest-red) 50% 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  /* La card sotto resta cliccabile/trascinabile: l'anello e' solo disegno. */
+  pointer-events: none;
+}
+
+.champion-card.picked img {
+  opacity: 0.3;
+}
+
+.champion-card .pool-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 2px;
+  /* Segue la stessa dimensione delle icone (--icon-scale, slider 1x-2x) -
+     senza questo il testo restava fisso a 8px mentre la card cresceva
+     intorno, sembrando via via piu' piccolo/sproporzionato (segnalato
+     dall'utente con screenshot a confronto). zoom (non font-size da solo)
+     fa crescere insieme testo, padding E gap fra le righe, non solo la
+     scritta - stesso approccio gia' usato per il contenuto della barra
+     laterale. */
+  zoom: var(--icon-scale, 2);
+}
+
+.champion-card .pool-stats-row {
+  color: var(--sky-light);
+  font-size: 8px;
+  line-height: 1.15;
+  text-align: center;
+  border-radius: 2px;
+  padding: 1px 0;
+  /* Sfondo FISSO scuro (non piu' il colore del giocatore) - richiesta
+     esplicita dell'utente con screenshot: le sfumature piu' chiare del
+     gradiente giocatore (vedi playerColorForFraction in app.js) rendevano
+     il testo bianco quasi illeggibile sopra. Il colore del giocatore ora va
+     SOLO sul bordo (impostato via JS, vedi renderGrid) - il testo si legge
+     sempre alla stessa maniera, il colore resta comunque riconoscibile
+     tutt'intorno. Stesso principio gia' usato per .player-chip. */
+  background: var(--nm-surface-lo);
+  border: 1px solid;
+}
+
+.champion-card .name {
+  position: absolute;
+  bottom: -16px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 9px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Modale "Modifica il tuo team" (tier list roster) ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  /* Velo piu' chiaro del nero pieno di prima + sfocatura: la finestra deve
+     sembrare sollevata SOPRA la stessa superficie, non incollata su un
+     fondo diverso. */
+  background: var(--nm-overlay);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-content {
+  --nm-surface: var(--nm-panel);
+  background: var(--nm-panel);
+  border: none;
+  border-radius: 26px;
+  box-shadow: var(--nm-out-lg), 0 24px 60px var(--nm-drop-lg);
+  padding: 22px;
+  width: min(1150px, 95vw);
+  height: min(880px, 92vh);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--sky-light);
+  letter-spacing: 0.02em;
+}
+
+#roster-role-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.row-with-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.row-with-buttons select,
+.row-with-buttons input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-in);
+  padding: 6px 8px;
+  color: var(--text);
+  font-size: 12px;
+  transition: box-shadow 0.16s ease;
+}
+
+.row-with-buttons input[type="text"]:focus {
+  outline: none;
+  box-shadow: var(--nm-in), inset 0 0 0 1px var(--nm-ring-faint);
+  color: var(--sky-light);
+}
+
+.row-with-buttons button {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  color: var(--sky-mid);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.row-with-buttons button:hover {
+  box-shadow: var(--nm-out);
+  color: var(--sky-light);
+}
+
+.row-with-buttons button:active {
+  box-shadow: var(--nm-in-sm);
+}
+
+.role-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.roster-role-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: none;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-out-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.roster-role-tab img {
+  width: 16px;
+  height: 16px;
+}
+
+.roster-role-tab.active {
+  color: var(--sky-light);
+  box-shadow: var(--nm-in-sm), inset 0 0 0 1px var(--nm-ring);
+}
+
+#tournament-url,
+#tournament-team-name,
+/* #tag-editor-search non aveva NESSUNA regola propria in tutto il file: era
+   rimasto l'input bianco di sistema (fondo bianco, testo nero, spigoli vivi)
+   dentro un modale scuro - bug preesistente, mai notato perche' l'editor tag
+   e' poco frequentato. Agganciato qui insieme agli altri campi. */
+#tag-editor-search {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-in);
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 13px;
+  transition: box-shadow 0.16s ease;
+}
+
+#tournament-url:focus,
+#tournament-team-name:focus,
+#tag-editor-search:focus {
+  outline: none;
+  box-shadow: var(--nm-in), inset 0 0 0 1px var(--nm-ring-faint);
+  color: var(--sky-light);
+}
+
+/* ---------- Combobox costruito a mano (menu team / menu giocatori) -------
+   Al posto di <input list=datalist>. Il datalist nativo filtra sempre i
+   suggerimenti sul testo gia' scritto nel campo: con un nome dentro
+   mostrava solo i nomi simili, ed era il motivo per cui cliccare al centro
+   e cliccare la freccia davano due elenchi diversi (la freccia svuotava il
+   campo prima di aprire, apposta per aggirarlo). Qui i due gesti sono
+   separati e non si sovrappongono: il CAMPO rinomina cio' che e'
+   selezionato, la FRECCIA apre l'elenco completo per sceglierne un altro.
+
+   La conca neumorfica sta sul contenitore, non sull'input: cosi' la
+   freccia vive DENTRO il campo incavato invece di essere un bottone
+   appiccicato di fianco. Queste regole devono restare DOPO
+   .row-with-buttons input[type="text"] (specificita' identica, vince
+   l'ultima del file). */
+.combo {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  background: var(--nm-surface);
+  border-radius: 14px;
+  box-shadow: var(--nm-in);
+  transition: box-shadow 0.16s ease;
+}
+
+.combo:focus-within {
+  box-shadow: var(--nm-in), inset 0 0 0 1px var(--nm-ring-faint);
+}
+
+.combo input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.combo input[type="text"]:focus {
+  outline: none;
+  box-shadow: none;
+  color: var(--sky-light);
+}
+
+.combo input[type="text"]:disabled {
+  color: var(--nm-text-disabled);
+}
+
+.combo-arrow {
+  flex: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0 10px 0 4px;
+  color: var(--text-dim);
+  /* Piccolo come la freccia di un <select> nativo: e' quello che sostituisce
+     (il datalist ne disegnava una identica), e piu' grande sembrerebbe un
+     bottone a se' invece che la parte apribile del campo. */
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.16s ease;
+}
+
+.combo-arrow:hover {
+  color: var(--sky-light);
+}
+
+/* L'elenco galleggia sopra il resto del modale: ombra portata vera
+   (--nm-drop), come popover e modali, non una delle due neumorfiche. */
+.combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--nm-surface-hi);
+  border-radius: 14px;
+  box-shadow: var(--nm-out-sm), 0 10px 26px var(--nm-drop);
+  padding: 5px;
+}
+
+.combo-list.hidden {
+  display: none;
+}
+
+.combo-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  padding: 6px 9px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.combo-option:hover {
+  box-shadow: var(--nm-in-xs);
+  color: var(--sky-light);
+}
+
+/* Quello aperto adesso: premuto dentro il materiale, come ogni altro
+   "selezionato" del tema (mai un bordo o un outline). */
+.combo-option.current {
+  box-shadow: var(--nm-in-xs), inset 0 0 0 1px var(--nm-ring);
+  color: var(--sky-light);
+}
+
+/* Un giocatore senza nome non e' un errore da nascondere: e' una riga
+   vuota che va comunque raggiunta, altrimenti resta li' a contare nel
+   totale del ruolo senza che si possa ne' aprirla ne' cancellarla - era
+   esattamente il "Mid (2) ma ne appare uno solo" segnalato dall'utente. */
+.combo-option-name.empty {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* Riga secondaria: il Riot ID. E' cio' che distingue due giocatori
+   omonimi, che col solo nome erano indistinguibili. */
+.combo-option-sub {
+  display: block;
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+
+.combo-empty {
+  padding: 6px 9px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* ---------- Avviso "modifiche non salvate" ----------
+   Velo interno al modale roster: copre solo lui, non tutta la pagina, ed e'
+   sopra ogni altro suo contenuto. */
+/* ---------- INGRANDIMENTO DEI MODALI DI LAVORO (+50%) ----------
+   Richiesta dell'utente (2026-09-06), prima per il solo "Modifica il tuo
+   team" - "vorrei rendere la sezione più grande... anche le icone sono
+   abbastanza piccole... aumenta di pari passo anche la grandezza delle
+   varie zone, oltre che delle icone, la vorrei proprio più grande senza
+   modificare il rapporto attuale" - poi, visto il risultato, estesa a
+   torneo, training e draft salvate.
+
+   Fatto con `zoom` e non riscalando a mano le singole misure: solo nel
+   modale roster ce ne sono una quarantina (altezza delle tier, icone 26px,
+   colonne della griglia, padding, raggi, corpi del testo, il combobox...) e
+   moltiplicarle una per una avrebbe significato altrettante occasioni di
+   sbagliare proprio il rapporto che va conservato. Con lo zoom il rapporto
+   resta esatto per costruzione e nel resto del file non cambia niente.
+
+   `zoom` e non `transform: scale()`: transform NON ri-dispone il contenuto
+   (lo disegna piu' grande e basta, sfocato e fuori dai bordi, senza che le
+   barre di scorrimento interne se ne accorgano), zoom si'.
+
+   REGOLA DA RICORDARE: ogni misura in unita' di viewport (vw/vh) dentro un
+   modale che sta in questo elenco va DIVISA per 1.5, perche' lo zoom
+   moltiplica anche quelle - senza, su uno schermo piccolo il modale
+   uscirebbe fuori e, dato che .modal-overlay centra con flex, verrebbe
+   tagliato in cima e diventerebbe irraggiungibile. Verificato misurando,
+   non dedotto.
+
+   L'editor tag NON e' in elenco: l'utente ha chiesto questi quattro. */
+#roster-modal .modal-content,
+#tournament-modal .modal-content,
+#training-modal .modal-content,
+#saved-drafts-modal .modal-content {
+  zoom: 1.5;
+}
+
+/* Il velo si ancora al modale, quindi quello deve fare da riferimento:
+   .modal-content non e' posizionata di suo. Solo per questo modale, per non
+   cambiare il contesto di impilamento degli altri. */
+#roster-modal .modal-content {
+  position: relative;
+
+  /* Ingrandito del 50% - vedi il blocco --modal-zoom qui sopra, che porta
+     lo zoom; qui restano solo le misure di partenza. I due limiti in unita'
+     di viewport sono divisi per lo zoom (vedi li' il perche'). */
+  width: min(1150px, calc(95vw / 1.5));
+  height: min(880px, calc(92vh / 1.5));
+}
+
+/* "Da che lato giochi" - stessa impalcatura del velo delle modifiche non
+   salvate, ma FIXED e non absolute: quello vive dentro il modale del roster,
+   questo deve coprire tutta la finestra perche' nasce dalla barra in alto.
+   I due bottoni prendono i colori dei lati gia' usati dai pick suggeriti
+   (--suggest-blue / --suggest-red): la scelta si legge senza leggere. */
+/* IN QUESTO FOGLIO NON ESISTE UNA REGOLA GLOBALE `.hidden`: ogni elemento ha
+   la sua, scritta per id (#counter-diagram-body.hidden, #pool-filter.hidden,
+   ...). Ci sono cascato scrivendo il modale training - avevo messo la classe
+   `hidden` su tre elementi nuovi dando per scontato che bastasse, e restavano
+   tutti visibili perche' `.row-with-buttons { display: flex }` vinceva su una
+   regola che non c'era. Peggio: `classList.contains("hidden")` diceva di si',
+   quindi la prova automatica passava e solo lo screenshot ha mostrato la
+   verita'. Se aggiungi un elemento nascondibile, aggiungi anche la sua
+   regola. */
+/* Nel modale training i bottoni a coppia devono essere larghi UGUALI: con
+   `flex: 1 1 auto` (la regola generale di .tournament-side-btn) la base e' il
+   contenuto, quindi "Libera" e "Contro una squadra pro" venivano diversi solo
+   perche' il testo e' di lunghezza diversa. Base 0 = si spartiscono la riga
+   in parti uguali, qualunque cosa ci sia scritto.
+
+   Circoscritto a QUESTO modale di proposito: la stessa classe la usano anche
+   i bottoni coi nomi delle squadre in modalita' torneo, generati da JS e di
+   lunghezza imprevedibile - li' la base sul contenuto e' quello che serve, e
+   il min-width esiste apposta per loro. */
+#training-modal .row-with-buttons > .tournament-side-btn {
+  flex-basis: 0;
+}
+
+#training-team-pick.hidden,
+#training-enemy-pool-row.hidden,
+#training-enemy-pool-hint.hidden {
+  display: none;
+}
+
+/* Prima configurazione (scarico immagini campioni). Fixed e sopra tutto:
+   finche' non ci sono le icone la griglia sotto non ha niente da mostrare, e
+   lasciarla intravedere vuota sembrerebbe un errore invece di un'attesa.
+   Regola .hidden scritta per id come tutte le altre di questo foglio: qui
+   NON esiste una .hidden globale. */
+.art-setup {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--nm-surface);
+}
+
+#art-setup.hidden,
+#art-setup-retry.hidden {
+  display: none;
+}
+
+.art-setup-box {
+  background: var(--nm-panel);
+  border-radius: 20px;
+  box-shadow: var(--nm-out-lg), 0 18px 44px var(--nm-drop-lg);
+  padding: 26px 30px;
+  max-width: 440px;
+  text-align: center;
+}
+
+.art-setup-box h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+  color: var(--text);
+}
+
+.art-setup-box p {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.art-setup-bar {
+  height: 8px;
+  border-radius: 6px;
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in-sm);
+  overflow: hidden;
+}
+
+#art-setup-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 6px;
+  background: var(--sky-mid);
+  transition: width 0.25s ease;
+}
+
+.art-setup-count {
+  margin: 10px 0 0 !important;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.art-setup-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.art-setup-buttons button {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  padding: 8px 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.art-setup-buttons button:hover {
+  color: var(--sky-light);
+}
+
+.side-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--nm-overlay);
+  backdrop-filter: blur(2px);
+}
+
+.side-picker.hidden {
+  display: none;
+}
+
+.side-picker-box {
+  background: var(--nm-panel);
+  border-radius: 20px;
+  box-shadow: var(--nm-out-lg), 0 18px 44px var(--nm-drop-lg);
+  padding: 22px 24px;
+  max-width: 420px;
+  text-align: center;
+}
+
+.side-picker-box p {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.side-picker-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.side-picker-buttons button {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  padding: 10px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.side-picker-buttons button:hover {
+  transform: translateY(-1px);
+}
+
+#side-picker-blue {
+  color: var(--suggest-blue);
+  box-shadow: var(--nm-out-sm), inset 0 0 0 1px var(--suggest-blue-ring);
+}
+
+#side-picker-red {
+  color: var(--suggest-red);
+  box-shadow: var(--nm-out-sm), inset 0 0 0 1px var(--suggest-red-ring);
+}
+
+#side-picker-skip {
+  margin-top: 14px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Il promemoria nella barra: dice da che lato sei e ci si clicca per
+   cambiarlo. Senza, l'unico modo per correggere una scelta sbagliata
+   sarebbe riselezionare il team - e su un <select> riscegliere la voce
+   gia' attiva non emette nessun evento. */
+.context-side-chip {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 10px;
+  box-shadow: var(--nm-out-sm);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.context-side-chip.hidden {
+  display: none;
+}
+
+.context-side-chip.side-blue {
+  color: var(--suggest-blue);
+}
+
+.context-side-chip.side-red {
+  color: var(--suggest-red);
+}
+
+.context-side-chip.side-none {
+  color: var(--text-dim);
+}
+
+.roster-unsaved {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--nm-overlay);
+  backdrop-filter: blur(2px);
+  border-radius: 26px;
+}
+
+.roster-unsaved.hidden {
+  display: none;
+}
+
+.roster-unsaved-box {
+  background: var(--nm-panel);
+  border-radius: 20px;
+  box-shadow: var(--nm-out-lg), 0 18px 44px var(--nm-drop-lg);
+  padding: 20px 22px;
+  max-width: 460px;
+}
+
+.roster-unsaved-box p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.roster-unsaved-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.roster-unsaved-buttons button {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  padding: 7px 14px;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.roster-unsaved-buttons button:hover {
+  color: var(--sky-light);
+}
+
+.roster-unsaved-buttons button:active {
+  box-shadow: var(--nm-in-sm);
+}
+
+#roster-unsaved-save {
+  color: var(--sky-light);
+}
+
+#roster-tierlist-file {
+  display: none;
+}
+
+#roster-tierlist-status {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+#roster-tierlist-preview {
+  display: none;
+  max-width: 220px;
+  max-height: 90px;
+  border-radius: 12px;
+  border: none;
+  box-shadow: var(--nm-out-xs);
+  flex: none;
+}
+
+#roster-tierlist-preview.visible {
+  display: block;
+}
+
+#roster-tier-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+  flex: none;
+}
+
+.tier-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-in-xs);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.tier-row.active {
+  box-shadow: var(--nm-in-sm), inset 0 0 0 1px var(--nm-ring);
+}
+
+.tier-row.drag-over {
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in), inset 0 0 12px var(--nm-glow);
+}
+
+.tier-row .tier-label {
+  width: 20px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text);
+  flex: none;
+}
+
+.tier-row .tier-champs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.tier-champ-wrap {
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.tier-champ {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: block;
+  /* Il div .tier-champ-wrap e' l'elemento draggable, non l'img - vedi
+     commento in renderRosterTierRows (app.js) sul perche' non puo' essere
+     la stessa immagine. */
+  -webkit-user-drag: none;
+}
+
+#roster-search {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--nm-in);
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 13px;
+  transition: box-shadow 0.16s ease;
+}
+
+#roster-search:focus {
+  outline: none;
+  box-shadow: var(--nm-in), inset 0 0 0 1px var(--nm-ring-faint);
+  color: var(--sky-light);
+}
+
+#roster-champion-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 6px;
+  align-content: start;
+}
+
+#roster-champion-grid .champion-card {
+  padding: 2px;
+}
+
+#roster-champion-grid .champion-card.assigned img {
+  opacity: 0.35;
+}
+
+/* Editor tag in-app (richiesto esplicitamente dall'utente 2026-08-27) -
+   layout master-detail: lista campioni cercabile a sinistra (stretta),
+   pannello di modifica del campione selezionato a destra (largo) - a
+   differenza degli altri modali di questo file, qui servono DUE aree
+   scrollabili indipendenti affiancate, non una sola colonna verticale. */
+#tag-editor-body {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+#tag-editor-list-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 260px;
+  flex: none;
+  min-height: 0;
+}
+
+#tag-editor-champ-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tag-editor-champ-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.tag-editor-champ-row:hover {
+  background: var(--nm-surface);
+  box-shadow: var(--nm-out-xs);
+}
+
+.tag-editor-champ-row.active {
+  background: var(--nm-surface);
+  box-shadow: var(--nm-in-xs), inset 0 0 8px var(--nm-glow-soft);
+  color: var(--sky-light);
+}
+
+.tag-editor-champ-row img {
+  width: 26px;
+  height: 26px;
+  border-radius: 10px;
+  flex: none;
+}
+
+.tag-editor-champ-row span {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#tag-editor-panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#tag-editor-champ-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#tag-editor-champ-header img {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+}
+
+#tag-editor-champ-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.tag-editor-group h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tag-editor-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.tag-editor-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+#tag-editor-status {
+  font-size: 12px;
+  color: var(--text-dim);
+  min-height: 16px;
+}
+
+#tag-editor-status.success {
+  color: #4caf6d;
+}
+
+#tag-editor-status.error {
+  color: #d64545;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-footer button {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  color: var(--sky-mid);
+  padding: 8px 18px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.modal-footer button:hover {
+  box-shadow: var(--nm-out);
+  color: var(--sky-light);
+}
+
+.modal-footer button:active {
+  box-shadow: var(--nm-in-sm);
+}
+
+/* ---------- Controlli nativi e barre di scorrimento ----------
+   Due cose che il tema precedente lasciava all'aspetto di sistema e che su
+   una superficie scura continua stonano parecchio. */
+
+/* Restavano azzurro-Windows in mezzo a tutto il resto (visibile su "Solo
+   ruolo" nel roster e su ogni spunta dell'editor tag). accent-color e' il
+   modo piu' semplice per ricolorarle senza ridisegnarle da zero con uno
+   pseudo-elemento. */
+input[type="checkbox"] {
+  accent-color: var(--blue-dark);
+}
+
+/* Erano quelle chiare di sistema: due strisce bianche verticali fisse ai
+   lati della griglia campioni e delle barre laterali. Stesso principio del
+   resto della UI: canale scavato, cursore estruso. */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--nm-surface);
+  border-radius: 999px;
+  box-shadow: var(--nm-in-xs);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--nm-surface-hi);
+  border-radius: 999px;
+  /* Bordo trasparente + background-clip:content-box = un margine d'aria
+     dentro al canale, cosi' il cursore sembra appoggiato DENTRO la
+     scanalatura invece di riempirla fino ai bordi. */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f4759;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--nm-surface);
+}
+
+/* Selettore completo (non il solo .training-role-champ-icon) per eguagliare
+   la specificita' di `.training-role-row img.training-role-champ-icon` piu'
+   sopra: senza, il raggio resterebbe a 4px mentre il clip-path taglia gia' a
+   7px, ed e' il clip-path piu' aggressivo a vincere. Vanno tenuti allineati,
+   vedi la nota sulla coppia raggio/clip-path su .ban-slot. */
+.training-role-row img.training-role-champ-icon {
+  border-radius: 7px;
+}
+
+/* ============================================================================
+   TEMA CHIARO
+   ============================================================================
+   Richiesto dall'utente 2026-09-05 ("attualmente è presente solo il tema
+   scuro, che è quello più preferibile, volevo creare un'opzione per avere
+   tema chiaro - tema scuro, in modo che ognuno può immettere la sua
+   preferenza"). Lo scuro resta il DEFAULT: il chiaro si attiva con la
+   classe `theme-light` su <body>, messa da app.js e ricordata in
+   localStorage come tutte le altre preferenze.
+
+   NON e' un'inversione dei colori. Nel neumorphism la forma esiste solo
+   grazie a luce e ombra, e le due si comportano in modo opposto sui due
+   fondi:
+   - su fondo SCURO la luce va tenuta bassissima (~0.05) o legge come un
+     bordo chiaro finto, mentre l'ombra puo' essere quasi nera;
+   - su fondo CHIARO e' l'esatto contrario: la luce e' bianco quasi pieno,
+     e l'ombra deve restare un grigio-azzurro tenue, mai nera - un nero
+     all'80% qui sporca invece di scavare.
+   Per questo i due blocchi hanno valori di alpha molto diversi e non
+   simmetrici.
+
+   Tutto il resto del file non sa nulla dei temi: usa i token di ruolo
+   (--nm-surface, --nm-ring, --nm-glow, ...) e questo blocco li ridefinisce.
+   Se si aggiunge un componente nuovo, basta usare quei token e funzionera'
+   in entrambi i temi senza scrivere altro qui.
+
+   Nota su --sky-light/--sky-mid: nel resto del file fanno da colore di
+   testo primario/secondario oltre che da accento, quindi qui diventano due
+   grigio-blu SCURI. Il nome resta quello dello scuro per non dover
+   riscrivere ~50 regole, ma il ruolo (primario/secondario) e' lo stesso in
+   entrambi i temi. */
+
+.theme-light {
+  /* Ardesia chiara, con la stessa punta di blu della versione scura. */
+  --nm-surface: #dde3ee;
+  --nm-surface-lo: #d0d7e5;
+  --nm-surface-hi: #eef2f8;
+  --nm-panel: #e7ecf5;
+
+  /* Ombra grigio-azzurra, MAI nera; luce bianca quasi piena. */
+  --nm-dark: rgba(157, 172, 197, 0.55);
+  --nm-light: rgba(255, 255, 255, 0.9);
+
+  /* Testo: gli stessi due ruoli dello scuro, invertiti in luminosita'. */
+  --sky-light: #232a3b;
+  --sky-mid: #59637d;
+  --blue-dark: #4a55a5;
+
+  --border: rgba(90, 105, 150, 0.12);
+
+  /* Anelli e alone: su fondo chiaro devono essere SCURI per leggersi. */
+  --nm-ring: rgba(60, 72, 110, 0.32);
+  --nm-ring-strong: rgba(60, 72, 110, 0.45);
+  --nm-ring-faint: rgba(60, 72, 110, 0.22);
+  --nm-thumb-glow: rgba(74, 85, 165, 0.3);
+  --nm-text-disabled: rgba(89, 99, 125, 0.4);
+  --nm-placeholder: rgba(89, 99, 125, 0.65);
+  --nm-glow: rgba(96, 112, 200, 0.4);
+  --nm-glow-soft: rgba(96, 112, 200, 0.3);
+
+  /* Anche l'ombra portata di modali/popover si alleggerisce: su fondo
+     chiaro quella dello scuro sembrerebbe una macchia. */
+  --nm-drop: rgba(120, 134, 165, 0.35);
+  --nm-drop-lg: rgba(120, 134, 165, 0.4);
+  --nm-overlay: rgba(120, 132, 160, 0.45);
+}
+
+/* Luce d'ambiente del <body>: nello scuro e' un chiarore azzurro che
+   stacca dal fondo, qui va rovesciata in una velatura piu' fredda,
+   altrimenti su un fondo gia' chiaro non si vedrebbe affatto. */
+.theme-light body {
+  background-image: radial-gradient(
+    ellipse 120% 90% at 22% 0%,
+    rgba(255, 255, 255, 0.75),
+    rgba(0, 0, 0, 0) 62%
+  );
+}
+
+/* I colori di STATO restano quelli di sempre (verde=torneo, ambra=training,
+   rosso=errore): portano informazione, non sono decorazione. Cambia solo la
+   LUMINOSITA', perche' le varianti schiarite scelte per il fondo scuro su un
+   fondo chiaro perdono leggibilita'. Valori scelti misurando il contrasto
+   reale, non a occhio: il primo tentativo (#2e7d4f verde, #a2661f ambra)
+   stava a 3.92 e 3.66 contro il fondo, sotto la soglia AA di 4.5. Questi
+   stanno a 5.0 e 5.16 sul fondo, 5.44 e 5.61 sui pannelli. */
+.theme-light #tournament-mode-open.connected {
+  color: #256b41;
+}
+
+.theme-light #training-mode-open.training-active,
+.theme-light .slot-rewind-btn,
+.theme-light .training-role-confirm-btn {
+  color: #855017;
+}
+
+.theme-light .training-eval-note.push {
+  color: #256b41;
+}
+
+.theme-light #tag-editor-status.success {
+  color: #256b41;
+}
+
+/* Bottoni d'azione: nello scuro sono due gradienti scuri con testo chiaro.
+   Qui restano gli unici elementi con tinta propria, ma virati piu' vivi per
+   staccare da una superficie chiara invece che da una scura. */
+.theme-light #tournament-confirm,
+.theme-light #tournament-evaluate {
+  background: linear-gradient(145deg, #5f6bc4, #4a55a5);
+  color: #f2f5fd;
+  box-shadow: var(--nm-out), 0 0 18px rgba(74, 85, 165, 0.28);
+}
+
+.theme-light #tournament-confirm:active,
+.theme-light #tournament-evaluate:active {
+  background: linear-gradient(145deg, #4a55a5, #5f6bc4);
+}
+
+.theme-light #training-confirm {
+  background: linear-gradient(145deg, #d99a45, #b87c2c);
+  color: #fff8ee;
+  box-shadow: var(--nm-out), 0 0 18px rgba(184, 124, 44, 0.25);
+}
+
+.theme-light #training-confirm:active {
+  background: linear-gradient(145deg, #b87c2c, #d99a45);
+}
+
+/* Il pomello acceso dell'interruttore: nello scuro si SCHIARISCE verso la
+   luce, qui deve fare il contrario e scurirsi, o sparirebbe nel binario. */
+.theme-light .toggle-switch input:checked ~ .toggle-track .toggle-thumb {
+  background: var(--blue-dark);
+}
+
+.theme-light .toggle-thumb {
+  background: var(--sky-mid);
+}
+
+/* Statistiche pool sulle icone in griglia: testo chiaro su fondo scuro
+   nello scuro, va rovesciato qui o resterebbe illeggibile. */
+.theme-light .champion-card .pool-stats-row {
+  color: var(--sky-light);
+  background: var(--nm-surface-hi);
+}

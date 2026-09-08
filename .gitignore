@@ -1,0 +1,61 @@
+# --- Rigenerabili dal progetto stesso -------------------------------------
+.venv/
+dist/
+build/
+__pycache__/
+*.pyc
+
+# --- Ad-blocker di terze parti --------------------------------------------
+# vendor/ublock-origin-lite/ E' VERSIONATO (~36MB): serve alla modalita'
+# torneo e al build (vedi driftdraft.spec), e tenerlo qui rende il clone
+# completo senza dipendere dal fatto che quella release resti scaricabile
+# fra qualche anno - stessa scelta gia' fatta per assets/icons e
+# assets/splash. E' GPL-3.0, LICENSE.txt conservato non modificato.
+# scripts/fetch_adblocker.py serve ad AGGIORNARLO, non a installarlo.
+#
+# Escluso solo questo: Chromium ci compila dentro i propri ruleset indicizzati
+# la prima volta che carica l'estensione (14MB, 56 file). E' un artefatto
+# generato a runtime, non sorgente - si rigenera da solo e non ha senso
+# versionarlo.
+vendor/ublock-origin-lite/_metadata/
+
+# --- Asset e backup pesanti, NON rigenerabili da script --------------------
+# Materiale procurato/preparato a mano (~214MB il primo, ~107MB il secondo).
+# Restano fuori solo per la dimensione: vivono in locale e nei backup zip in
+# C:\Claude Projects\DriftDraft-backups\ (vedi memoria di progetto).
+# NB: niente virgolette attorno ai percorsi con spazi - in .gitignore non
+# sono sintassi valida e il pattern non fa match (sbagliato al primo
+# tentativo, 178 file del pack erano finiti in stage).
+assets/Icon Pack League of Legends + Borders/
+assets/icons_bordered_backup_*/
+assets/tiermaker_refs/
+backups/
+
+# Il resto di assets/ (icons, splash, role_icons, rank_icons, icon.ico) e'
+# versionato: icons e splash sarebbero rigenerabili con
+# scripts/sync_ddragon_icons.py e sync_splash_art.py, ma tenerli qui rende il
+# clone funzionante subito, senza dipendere da come Data Dragon rispondera'
+# fra un anno. Sono ~21MB in tutto.
+
+# --- Dati personali -------------------------------------------------------
+# TOLTI dalla repo E DALLA SUA STORIA il 2026-09-06 (git-filter-repo + push
+# forzato), su richiesta dell'utente: roster.json conteneva nomi reali e Riot
+# ID di 10 giocatori veri del team che segue. Non bastava un commit che li
+# cancellasse - sarebbero rimasti leggibili nei commit precedenti.
+#
+# Restano sul disco dell'utente e continuano a funzionare: e' solo git a non
+# vederli piu'. L'obiettivo dichiarato e' una distribuzione PUBBLICA e
+# gratuita (vedi memoria di progetto), e questi due file sono stato personale,
+# non contenuto del progetto: non devono tornarci dentro.
+#
+# Copia di sicurezza in DriftDraft-backups/dati-personali-pre-purge/.
+# Immagini dei campioni: NON stanno piu' nella repository ne' nel pacchetto.
+# Sono materiale di Riot Games, e la loro policy per i progetti amatoriali e'
+# restrittiva su chi lo ridistribuisce. L'app le scarica al primo avvio dai
+# CDN ufficiali, sul computer di chi la usa (vedi driftdraft/champion_art.py).
+# 346 file e 21 MB in meno, e nessuna ridistribuzione.
+assets/icons/
+assets/splash/
+
+data/roster.json
+data/saved_drafts.json

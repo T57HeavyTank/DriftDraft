@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "driftdraft-web",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-m",
+        "driftdraft.server"
+      ],
+      "port": 8721
+    },
+    {
+      "name": "driftdraft-test-8799",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "-c",
+        "from driftdraft.server import run_server; run_server(port=8799)"
+      ],
+      "port": 8799
+    }
+  ]
+}

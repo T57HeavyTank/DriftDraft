@@ -1,0 +1,19 @@
+{
+  "Lucian": {
+    "comps": [
+      "Pick",
+      "Poke \\ Siege",
+      "TeamFight \\ WomboCombo"
+    ],
+    "tags": [
+      "Danno DPS singolo",
+      "Danno burst AoE",
+      "Danno burst singolo",
+      "Mobilità"
+    ],
+    "roles": [
+      "Bot",
+      "Mid"
+    ]
+  }
+}
