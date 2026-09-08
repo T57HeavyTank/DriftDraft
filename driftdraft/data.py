@@ -69,7 +69,18 @@ class Champion:
     riot_id: int | None = None
 
 
+_champions_cache: list[Champion] | None = None
+_champions_cache_key: tuple | None = None
+
+
 def load_champions(path: Path = DEFAULT_DATA_PATH) -> list[Champion]:
+    global _champions_cache, _champions_cache_key
+
+    st = path.stat()
+    key = (str(path), st.st_mtime_ns, st.st_size)
+    if _champions_cache is not None and _champions_cache_key == key:
+        return _champions_cache
+
     wb = openpyxl.load_workbook(path, data_only=True)
     ws = wb[SHEET_NAME]
 
@@ -117,4 +128,6 @@ def load_champions(path: Path = DEFAULT_DATA_PATH) -> list[Champion]:
             for c in champions
         ]
 
+    _champions_cache = champions
+    _champions_cache_key = key
     return champions

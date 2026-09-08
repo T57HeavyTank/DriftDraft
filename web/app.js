@@ -585,6 +585,7 @@ let redNames = new Set();
 // stesso principio di "ultima risposta vince, non ultima richiesta
 // inviata" gia' visto altrove nel progetto per evitare race condition.
 let suggestionsFetchSeq = 0;
+let suggestionsDebounceTimer = null;
 
 // Ruoli NEMICI - richiesto esplicitamente dall'utente (2026-08-26, dopo un
 // caso reale osservato: "mi ha immesso Hecarim support anche se era il
@@ -5055,7 +5056,13 @@ function renderSuggestionsPanel() {
   fillSuggestionsRow("red", redSuggestions, teams.right.filter((n) => n).length, redThin);
 }
 
-async function refreshSuggestions() {
+function refreshSuggestions() {
+  if (suggestionsDebounceTimer) clearTimeout(suggestionsDebounceTimer);
+  suggestionsDebounceTimer = setTimeout(_doRefreshSuggestions, 150);
+}
+
+async function _doRefreshSuggestions() {
+  suggestionsDebounceTimer = null;
   if (!suggestionsEnabled) {
     if (blueNames.size > 0 || redNames.size > 0) {
       blueSuggestions = [];

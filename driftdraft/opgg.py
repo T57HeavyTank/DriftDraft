@@ -21,6 +21,16 @@ from playwright.sync_api import sync_playwright
 
 from driftdraft.data import load_champions, slugify_champion_name
 
+_slug_to_name_cache: dict[str, str] | None = None
+
+
+def _get_slug_to_name() -> dict[str, str]:
+    global _slug_to_name_cache
+    if _slug_to_name_cache is None:
+        _slug_to_name_cache = {slugify_champion_name(c.name): c.name for c in load_champions()}
+    return _slug_to_name_cache
+
+
 _CHAMP_ROW_MARKER = re.compile(r"\d+\.\d+:1")  # formato "3.22:1 KDA", usato per individuare le righe campione
 
 
@@ -149,7 +159,14 @@ def fetch_team_pool(multisearch_url: str, requested_summoners: list[str]) -> lis
     (verificato - l'ordine puo' differire)."""
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--disable-blink-features=AutomationControlled"])
+        browser = p.chromium.launch(args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-background-networking",
+            "--disable-default-apps",
+            "--disable-extensions",
+            "--disable-sync",
+            "--no-first-run",
+        ])
         context = browser.new_context(viewport={"width": 1440, "height": 900}, user_agent=_USER_AGENT)
         page = context.new_page()
         page.goto(multisearch_url, wait_until="networkidle", timeout=30000)
@@ -158,7 +175,7 @@ def fetch_team_pool(multisearch_url: str, requested_summoners: list[str]) -> lis
         browser.close()
 
     # nomi campioni validi conosciuti, per scartare eventuali righe rumorose
-    real_slugs = {slugify_champion_name(c.name): c.name for c in load_champions()}
+    real_slugs = _get_slug_to_name()
 
     results = []
     for col in raw_cols:
@@ -259,7 +276,14 @@ def fetch_player_champions(region: str, riot_id: str) -> PlayerPool:
     url = f"https://op.gg/it/lol/summoners/{region}/{slug}/champions"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--disable-blink-features=AutomationControlled"])
+        browser = p.chromium.launch(args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-background-networking",
+            "--disable-default-apps",
+            "--disable-extensions",
+            "--disable-sync",
+            "--no-first-run",
+        ])
         context = browser.new_context(viewport={"width": 1440, "height": 900}, user_agent=_USER_AGENT)
         page = context.new_page()
         page.goto(url, wait_until="networkidle", timeout=30000)
@@ -267,7 +291,7 @@ def fetch_player_champions(region: str, riot_id: str) -> PlayerPool:
         raw_rows = page.evaluate(_PLAYER_EXTRACT_JS)
         browser.close()
 
-    real_slugs = {slugify_champion_name(c.name): c.name for c in load_champions()}
+    real_slugs = _get_slug_to_name()
     champs = []
     for r in raw_rows:
         if not r["champion"]:

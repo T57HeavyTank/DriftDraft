@@ -543,17 +543,42 @@ def _can_role_match(champion_names: list[str], champs_by_name: dict) -> bool:
     lentissima (trovato davvero: un test con 40 draft simulate non finiva
     piu' entro 2 minuti prima di questo fix).
 
-    Ricerca esaustiva sulle permutazioni di ROLE_ORDER prese a gruppi di
-    len(champion_names) (al massimo P(5,5)=120, banale per n<=5) - stessa
-    tecnica "forza bruta va benissimo per 5 elementi" di assign_roles, ma
-    qui basta l'ESISTENZA di una soluzione valida, non la migliore."""
+    Ricerca backtracking sui campioni piu' vincolati per primi (meno ruoli
+    possibili): con al massimo 5 elementi e 5 ruoli non serve un vero
+    algoritmo di matching bipartito, e partire dai piu' rigidi taglia
+    subito i rami morti - solitamente esce dopo aver provato 2-3 rami
+    invece di tutti i 120 percorsi possibili."""
     if not champion_names:
         return True
-    eligible = [champs_by_name[n].roles if n in champs_by_name else frozenset() for n in champion_names]
     n = len(champion_names)
-    return any(
-        all(combo[i] in eligible[i] for i in range(n)) for combo in permutations(ROLE_ORDER, n)
-    )
+    eligible = []
+    for name in champion_names:
+        roles = champs_by_name[name].roles if name in champs_by_name else frozenset()
+        # Intersezione con i ruoli validi, fallback a tutti se vuoto
+        valid = roles & set(ROLE_ORDER) if roles else set(ROLE_ORDER)
+        eligible.append(valid)
+
+    # Early exit: se qualcuno non ha ruoli validi, impossibile
+    for roles in eligible:
+        if not roles:
+            return False
+
+    # Ordina per numero di ruoli possibili (meno = piu' vincolato = prima)
+    indexed = sorted(range(n), key=lambda i: len(eligible[i]))
+
+    def backtrack(k: int, used: set) -> bool:
+        if k == n:
+            return True
+        idx = indexed[k]
+        for role in eligible[idx]:
+            if role not in used:
+                used.add(role)
+                if backtrack(k + 1, used):
+                    return True
+                used.remove(role)
+        return False
+
+    return backtrack(0, set())
 
 
 def _profile_roles_for(
@@ -599,12 +624,29 @@ def _profile_roles_for(
     # serve, cioe' sul CANDIDATO: e' li' che si decide cosa consigliare.
     ammesse = set()
     altri = [sue(n) or tag(n) for n in own_picks]
+    n_altri = len(altri)
+    # Pre-sort altri by fewest options for faster backtracking
+    indexed_altri = sorted(range(n_altri), key=lambda i: len(altri[i]))
     for r in possibili:
         restanti = [x for x in ROLE_ORDER if x != r]
-        if any(
-            all(combo[i] in altri[i] for i in range(len(altri)))
-            for combo in permutations(restanti, len(altri))
-        ):
+        # Quick check: if any existing pick has zero options, skip
+        if not all(restanti for _ in [0]):
+            continue
+
+        def _can_assign(k: int, used: set) -> bool:
+            if k == n_altri:
+                return True
+            idx = indexed_altri[k]
+            for role in altri[idx]:
+                if role in used:
+                    continue
+                used.add(role)
+                if _can_assign(k + 1, used):
+                    return True
+                used.remove(role)
+            return False
+
+        if _can_assign(0, {r}):
             ammesse.add(r)
     return ammesse
 
@@ -1238,14 +1280,21 @@ def _can_cover(role_sets: list[set[str]]) -> bool:
     algoritmo di matching bipartito, e partire dai piu' rigidi taglia
     subito i rami morti.
     """
-    order = sorted(range(len(role_sets)), key=lambda i: len(role_sets[i]))
+    n = len(role_sets)
+    if n == 0:
+        return True
+    # Ordina per numero di ruoli possibili (meno = piu' vincolato = prima)
+    indexed = sorted(range(n), key=lambda i: len(role_sets[i]))
 
     def go(k: int, used: set[str]) -> bool:
-        if k == len(order):
+        if k == n:
             return True
-        for role in role_sets[order[k]] - used:
-            if go(k + 1, used | {role}):
+        idx = indexed[k]
+        for role in role_sets[idx] - used:
+            used.add(role)
+            if go(k + 1, used):
                 return True
+            used.remove(role)
         return False
 
     return go(0, set())
