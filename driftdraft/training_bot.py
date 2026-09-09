@@ -543,41 +543,17 @@ def _can_role_match(champion_names: list[str], champs_by_name: dict) -> bool:
     lentissima (trovato davvero: un test con 40 draft simulate non finiva
     piu' entro 2 minuti prima di questo fix).
 
-    Ricerca backtracking sui campioni piu' vincolati per primi (meno ruoli
-    possibili): con al massimo 5 elementi e 5 ruoli non serve un vero
-    algoritmo di matching bipartito, e partire dai piu' rigidi taglia
-    subito i rami morti - solitamente esce dopo aver provato 2-3 rami
-    invece di tutti i 120 percorsi possibili."""
+    Ricerca esaustiva sulle permutazioni di ROLE_ORDER prese a gruppi di
+    len(champion_names) (al massimo P(5,5)=120, banale per n<=5) - stessa
+    tecnica "forza bruta va benissimo per 5 elementi" di assign_roles, ma
+    qui basta l'ESISTENZA di una soluzione valida, non la migliore."""
     if not champion_names:
         return True
+    eligible = [champs_by_name[n].roles if n in champs_by_name else frozenset() for n in champion_names]
     n = len(champion_names)
-    eligible = []
-    for name in champion_names:
-        roles = champs_by_name[name].roles if name in champs_by_name else frozenset()
-        eligible.append(roles)
-
-    # Un campione sconosciuto resta incompatibile, come nella semantica
-    # precedente: i dati non devono trasformare un nome non risolto in un jolly.
-    for roles in eligible:
-        if not roles:
-            return False
-
-    # Ordina per numero di ruoli possibili (meno = piu' vincolato = prima)
-    indexed = sorted(range(n), key=lambda i: len(eligible[i]))
-
-    def backtrack(k: int, used: set) -> bool:
-        if k == n:
-            return True
-        idx = indexed[k]
-        for role in eligible[idx]:
-            if role not in used:
-                used.add(role)
-                if backtrack(k + 1, used):
-                    return True
-                used.remove(role)
-        return False
-
-    return backtrack(0, set())
+    return any(
+        all(combo[i] in eligible[i] for i in range(n)) for combo in permutations(ROLE_ORDER, n)
+    )
 
 
 def _profile_roles_for(
@@ -623,24 +599,12 @@ def _profile_roles_for(
     # serve, cioe' sul CANDIDATO: e' li' che si decide cosa consigliare.
     ammesse = set()
     altri = [sue(n) or tag(n) for n in own_picks]
-    n_altri = len(altri)
-    # Pre-sort altri by fewest options for faster backtracking
-    indexed_altri = sorted(range(n_altri), key=lambda i: len(altri[i]))
     for r in possibili:
-        def _can_assign(k: int, used: set) -> bool:
-            if k == n_altri:
-                return True
-            idx = indexed_altri[k]
-            for role in altri[idx]:
-                if role in used:
-                    continue
-                used.add(role)
-                if _can_assign(k + 1, used):
-                    return True
-                used.remove(role)
-            return False
-
-        if _can_assign(0, {r}):
+        restanti = [x for x in ROLE_ORDER if x != r]
+        if any(
+            all(combo[i] in altri[i] for i in range(len(altri)))
+            for combo in permutations(restanti, len(altri))
+        ):
             ammesse.add(r)
     return ammesse
 

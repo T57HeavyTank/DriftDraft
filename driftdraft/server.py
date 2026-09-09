@@ -131,34 +131,15 @@ def _no_cache(res):
     return res
 
 
-_index_html_cache: str | None = None
-_index_html_key: tuple | None = None
-
-
 @app.get("/")
 def index():
-    global _index_html_cache, _index_html_key
-    index_path = WEB_DIR / "index.html"
-    try:
-        key = tuple(
-            (path.stat().st_mtime_ns, path.stat().st_size)
-            for path in (index_path, WEB_DIR / "style.css", WEB_DIR / "app.js")
-        )
-    except OSError:
-        response.content_type = "text/html; charset=utf-8"
-        return "<html><body>index.html not found</body></html>"
-
-    if _index_html_cache is None or key != _index_html_key:
-        html = index_path.read_text(encoding="utf-8")
-        for asset in ("style.css", "app.js"):
-            asset_mtime = int((WEB_DIR / asset).stat().st_mtime)
-            html = html.replace(f'/web/{asset}"', f'/web/{asset}?v={asset_mtime}"')
-        _index_html_cache = html
-        _index_html_key = key
-
+    html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    for asset in ("style.css", "app.js"):
+        mtime = int((WEB_DIR / asset).stat().st_mtime)
+        html = html.replace(f'/web/{asset}"', f'/web/{asset}?v={mtime}"')
     response.content_type = "text/html; charset=utf-8"
     _no_cache(response)
-    return _index_html_cache
+    return html
 
 
 @app.get("/web/<filepath:path>")
@@ -177,6 +158,18 @@ def project_assets(filepath):
 
 
 def _icon_url(champion_name: str) -> str:
+    # "?v=<mtime del FILE specifico>" (non un timestamp globale) - bug reale
+    # trovato dall'utente 2026-08-27 dopo aver sostituito le 173 icone con
+    # quelle Data Dragon: /assets/<path> (vedi project_assets sotto)
+    # deliberatamente NON manda no-store (altrimenti si ritorna al problema
+    # gia' risolto in passato, "170 immagini riscaricate ad ogni cambio
+    # filtro") - ma senza QUESTO, un browser/WebView2 con una copia gia' in
+    # cache da prima puo' continuare a mostrarla per euristica (Last-
+    # Modified) senza nemmeno ricontattare il server, anche se il file sul
+    # disco e' cambiato per davvero nel frattempo. Un mtime per-file (non
+    # uno globale) significa che le icone MAI toccate restano sulla stessa
+    # URL/cache di sempre (zero re-download inutili), solo quelle davvero
+    # sostituite (qui o in un futuro sync) ottengono un'URL nuova.
     path = ASSETS_DIR / "icons" / f"{champion_name}.png"
     try:
         mtime = int(path.stat().st_mtime)
@@ -186,6 +179,8 @@ def _icon_url(champion_name: str) -> str:
 
 
 def _splash_url(champion_name: str) -> str:
+    # Stessa logica di cache-busting per-file di _icon_url() sopra (vedi li'
+    # per il perche' - bug reale gia' preso con le icone, evitato qui a monte).
     path = ASSETS_DIR / "splash" / f"{champion_name}.jpg"
     try:
         mtime = int(path.stat().st_mtime)
