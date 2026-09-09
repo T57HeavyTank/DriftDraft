@@ -554,11 +554,10 @@ def _can_role_match(champion_names: list[str], champs_by_name: dict) -> bool:
     eligible = []
     for name in champion_names:
         roles = champs_by_name[name].roles if name in champs_by_name else frozenset()
-        # Intersezione con i ruoli validi, fallback a tutti se vuoto
-        valid = roles & set(ROLE_ORDER) if roles else set(ROLE_ORDER)
-        eligible.append(valid)
+        eligible.append(roles)
 
-    # Early exit: se qualcuno non ha ruoli validi, impossibile
+    # Un campione sconosciuto resta incompatibile, come nella semantica
+    # precedente: i dati non devono trasformare un nome non risolto in un jolly.
     for roles in eligible:
         if not roles:
             return False
@@ -628,11 +627,6 @@ def _profile_roles_for(
     # Pre-sort altri by fewest options for faster backtracking
     indexed_altri = sorted(range(n_altri), key=lambda i: len(altri[i]))
     for r in possibili:
-        restanti = [x for x in ROLE_ORDER if x != r]
-        # Quick check: if any existing pick has zero options, skip
-        if not all(restanti for _ in [0]):
-            continue
-
         def _can_assign(k: int, used: set) -> bool:
             if k == n_altri:
                 return True

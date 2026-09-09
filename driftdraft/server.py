@@ -132,26 +132,29 @@ def _no_cache(res):
 
 
 _index_html_cache: str | None = None
-_index_html_mtime: float = 0.0
+_index_html_key: tuple | None = None
 
 
 @app.get("/")
 def index():
-    global _index_html_cache, _index_html_mtime
+    global _index_html_cache, _index_html_key
     index_path = WEB_DIR / "index.html"
     try:
-        mtime = index_path.stat().st_mtime
+        key = tuple(
+            (path.stat().st_mtime_ns, path.stat().st_size)
+            for path in (index_path, WEB_DIR / "style.css", WEB_DIR / "app.js")
+        )
     except OSError:
         response.content_type = "text/html; charset=utf-8"
         return "<html><body>index.html not found</body></html>"
 
-    if _index_html_cache is None or mtime != _index_html_mtime:
+    if _index_html_cache is None or key != _index_html_key:
         html = index_path.read_text(encoding="utf-8")
         for asset in ("style.css", "app.js"):
             asset_mtime = int((WEB_DIR / asset).stat().st_mtime)
             html = html.replace(f'/web/{asset}"', f'/web/{asset}?v={asset_mtime}"')
         _index_html_cache = html
-        _index_html_mtime = mtime
+        _index_html_key = key
 
     response.content_type = "text/html; charset=utf-8"
     _no_cache(response)
@@ -173,17 +176,10 @@ def project_assets(filepath):
     return static_file(filepath, root=ASSETS_DIR)
 
 
-_icon_mtime_cache: dict[str, int] = {}
-_splash_mtime_cache: dict[str, int] = {}
-
-
 def _icon_url(champion_name: str) -> str:
     path = ASSETS_DIR / "icons" / f"{champion_name}.png"
     try:
-        mtime = _icon_mtime_cache.get(champion_name)
-        if mtime is None:
-            mtime = int(path.stat().st_mtime)
-            _icon_mtime_cache[champion_name] = mtime
+        mtime = int(path.stat().st_mtime)
     except OSError:
         return f"/assets/icons/{champion_name}.png"
     return f"/assets/icons/{champion_name}.png?v={mtime}"
@@ -192,10 +188,7 @@ def _icon_url(champion_name: str) -> str:
 def _splash_url(champion_name: str) -> str:
     path = ASSETS_DIR / "splash" / f"{champion_name}.jpg"
     try:
-        mtime = _splash_mtime_cache.get(champion_name)
-        if mtime is None:
-            mtime = int(path.stat().st_mtime)
-            _splash_mtime_cache[champion_name] = mtime
+        mtime = int(path.stat().st_mtime)
     except OSError:
         return f"/assets/splash/{champion_name}.jpg"
     return f"/assets/splash/{champion_name}.jpg?v={mtime}"

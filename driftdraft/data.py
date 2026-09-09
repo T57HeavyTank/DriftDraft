@@ -4,7 +4,7 @@ from pathlib import Path
 
 import openpyxl
 
-from driftdraft.champion_overrides import load_overrides
+from driftdraft.champion_overrides import OVERRIDES_PATH, load_overrides
 from driftdraft.paths import get_app_dir
 
 # Prima puntava al Desktop personale dell'utente (C:\Users\Tank\Desktop\...),
@@ -77,7 +77,12 @@ def load_champions(path: Path = DEFAULT_DATA_PATH) -> list[Champion]:
     global _champions_cache, _champions_cache_key
 
     st = path.stat()
-    key = (str(path), st.st_mtime_ns, st.st_size)
+    try:
+        overrides_st = OVERRIDES_PATH.stat()
+        overrides_key = (overrides_st.st_mtime_ns, overrides_st.st_size)
+    except OSError:
+        overrides_key = None
+    key = (str(path), st.st_mtime_ns, st.st_size, overrides_key)
     if _champions_cache is not None and _champions_cache_key == key:
         return _champions_cache
 
