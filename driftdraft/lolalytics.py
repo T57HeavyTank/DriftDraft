@@ -14,6 +14,16 @@ from playwright.sync_api import sync_playwright
 
 from driftdraft.data import load_champions, slugify_champion_name
 
+_slug_to_name_cache: dict[str, str] | None = None
+
+
+def _get_slug_to_name() -> dict[str, str]:
+    global _slug_to_name_cache
+    if _slug_to_name_cache is None:
+        _slug_to_name_cache = {slugify_champion_name(c.name): c.name for c in load_champions()}
+    return _slug_to_name_cache
+
+
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -97,7 +107,14 @@ def fetch_counters(reference_champion: str, role: str, tier: str = DEFAULT_TIER)
     url = f"https://lolalytics.com/lol/{slug}/counters/?lane={lane}&vslane={lane}&tier={tier}"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--disable-blink-features=AutomationControlled"])
+        browser = p.chromium.launch(args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-background-networking",
+            "--disable-default-apps",
+            "--disable-extensions",
+            "--disable-sync",
+            "--no-first-run",
+        ])
         context = browser.new_context(viewport={"width": 1440, "height": 2200}, user_agent=_USER_AGENT)
         page = context.new_page()
         # "networkidle" va in timeout su questo sito (attivita' di rete di
@@ -131,7 +148,7 @@ def fetch_counters(reference_champion: str, role: str, tier: str = DEFAULT_TIER)
         raw = page.evaluate(_EXTRACT_JS)
         browser.close()
 
-    slug_to_name = {slugify_champion_name(c.name): c.name for c in load_champions()}
+    slug_to_name = _get_slug_to_name()
 
     entries = []
     for item in raw:
@@ -325,7 +342,14 @@ def fetch_winrate_curve(
         url = f"https://lolalytics.com/lol/{ref_slug}/build/?lane={lane}&tier={tier}"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--disable-blink-features=AutomationControlled"])
+        browser = p.chromium.launch(args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-background-networking",
+            "--disable-default-apps",
+            "--disable-extensions",
+            "--disable-sync",
+            "--no-first-run",
+        ])
         context = browser.new_context(viewport={"width": 1440, "height": 1000}, user_agent=_USER_AGENT)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded", timeout=30000)

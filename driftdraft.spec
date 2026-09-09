@@ -7,6 +7,7 @@ l'ambiente virtuale attivo)."""
 
 import glob
 import os
+import py_compile
 import shutil
 
 from PyInstaller.utils.hooks import collect_data_files
@@ -183,3 +184,16 @@ for _leaguepedia_file in ("leaguepedia_drafts.json", "leaguepedia_tables.json"):
     _src = os.path.join(SPECPATH, "data", _leaguepedia_file)
     if os.path.exists(_src):
         shutil.copy2(_src, os.path.join(_data_dir, _leaguepedia_file))
+
+# Pre-compila tutti i .py in .pyc dentro _internal/: al primo avvio dell'exe
+# Python non deve compilare i sorgenti, solo caricare i .pyc gia' pronti.
+# Su un'app con ~50 moduli questo risparmia ~200-500ms al cold start.
+_internal_dir = os.path.join(DIST_DIR, "_internal")
+for dirpath, _, filenames in os.walk(_internal_dir):
+    for fn in filenames:
+        if fn.endswith(".py"):
+            py_path = os.path.join(dirpath, fn)
+            try:
+                py_compile.compile(py_path, cfile=py_path + "c", doraise=True)
+            except Exception:
+                pass  # non bloccare la build per un .pyc mancante

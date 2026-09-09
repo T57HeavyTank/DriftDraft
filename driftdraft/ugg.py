@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from playwright.sync_api import sync_playwright
 
 from driftdraft.data import load_champions, slugify_champion_name
-from driftdraft.lolalytics import DEFAULT_TIER, VALID_TIERS
+from driftdraft.lolalytics import DEFAULT_TIER, VALID_TIERS, _get_slug_to_name
 
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -98,7 +98,14 @@ def fetch_lane_counters(
     url = f"https://u.gg/lol/champions/{slug}/counter?role={ugg_role}&rank={tier}"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(args=["--disable-blink-features=AutomationControlled"])
+        browser = p.chromium.launch(args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-background-networking",
+            "--disable-default-apps",
+            "--disable-extensions",
+            "--disable-sync",
+            "--no-first-run",
+        ])
         context = browser.new_context(viewport={"width": 1440, "height": 2200}, user_agent=_USER_AGENT)
         page = context.new_page()
         page.goto(url, wait_until="domcontentloaded", timeout=30000)
@@ -112,7 +119,7 @@ def fetch_lane_counters(
         raw = page.evaluate(_EXTRACT_JS)
         browser.close()
 
-    slug_to_name = {slugify_champion_name(c.name): c.name for c in load_champions()}
+    slug_to_name = _get_slug_to_name()
 
     entries = []
     for item in raw:

@@ -1238,14 +1238,21 @@ def _can_cover(role_sets: list[set[str]]) -> bool:
     algoritmo di matching bipartito, e partire dai piu' rigidi taglia
     subito i rami morti.
     """
-    order = sorted(range(len(role_sets)), key=lambda i: len(role_sets[i]))
+    n = len(role_sets)
+    if n == 0:
+        return True
+    # Ordina per numero di ruoli possibili (meno = piu' vincolato = prima)
+    indexed = sorted(range(n), key=lambda i: len(role_sets[i]))
 
     def go(k: int, used: set[str]) -> bool:
-        if k == len(order):
+        if k == n:
             return True
-        for role in role_sets[order[k]] - used:
-            if go(k + 1, used | {role}):
+        idx = indexed[k]
+        for role in role_sets[idx] - used:
+            used.add(role)
+            if go(k + 1, used):
                 return True
+            used.remove(role)
         return False
 
     return go(0, set())
