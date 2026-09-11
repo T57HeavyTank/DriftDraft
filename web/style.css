@@ -441,6 +441,19 @@ body {
   cursor: default;
 }
 
+/* Tre bottoni-icona (🔄 ⇄ ✕) al posto del vecchio "Aggiorna" testuale -
+   richiesta esplicita dell'utente (2026-09-11), per fare spazio alla ✕.
+   Larghezza FISSA perche' il 🔄 diventa "…" mentre carica: con una misura
+   presa dal contenuto, la riga cambierebbe larghezza a ogni click. Stessa
+   specificita' di .pool-import button sopra: vale perche' viene dopo. */
+.pool-import button {
+  flex: none;
+  width: 28px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .pool-chip {
   display: inline-block;
   font-size: 11px;

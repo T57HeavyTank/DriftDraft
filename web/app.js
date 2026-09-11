@@ -398,7 +398,7 @@ let searchText = "";
 let expandedComps = { left: new Set(), right: new Set() }; // per squadra: comp aperte manualmente
 let activeTagFilters = new Set(); // condiviso, come activeFilters
 let activeRoleFilters = new Set(); // ruoli cliccati in alto a destra
-let teamPools = { left: null, right: null }; // risultato di /api/opgg-team, null finche' non si preme "Aggiorna"
+let teamPools = { left: null, right: null }; // risultato di /api/opgg-team, null finche' non si preme 🔄
 let activePoolFilters = new Set(); // "left"/"right" - quali pool INTERE squadra sono attive come filtro griglia
 // Filtro per SINGOLO giocatore (uno alla volta per lato, come
 // contextPlayerKey sotto - stessa ragione: durante una draft si guarda
@@ -726,12 +726,16 @@ function allBannedNames() {
   return [...bans.left, ...bans.right].filter(Boolean);
 }
 
-// Quanti "Aggiorna" op.gg sono in corso adesso. Serve a bloccare lo scambio
-// Blue/Red mentre uno scraping e' ancora aperto: il risultato si salva sul
-// lato catturato al momento del click, quindi scambiare a meta' caricamento
-// metterebbe il link da una parte e la sua pool dall'altra. Lo scraping dura
-// diversi secondi (Playwright), quindi non e' un caso teorico.
-let poolLoadsInFlight = 0;
+// Quanti 🔄 op.gg sono in corso adesso, PER LATO. Servono a bloccare scambio
+// e cancellazione mentre uno scraping e' ancora aperto: il risultato si salva
+// sul lato catturato al momento del click, quindi scambiare o cancellare a
+// meta' caricamento lascerebbe una pool dove non c'e' piu' il suo link. Lo
+// scraping dura diversi secondi (Playwright), quindi non e' un caso teorico.
+//
+// Per lato e non un totale: lo scambio tocca entrambi i lati e si blocca se
+// ne carica uno qualsiasi, ma cancellare Red mentre carica Blue e' innocuo e
+// non c'e' motivo di impedirlo.
+let poolLoadsInFlight = { left: 0, right: 0 };
 
 function setupPoolImport(team) {
   const input = document.getElementById(`pool-url-${team}`);
@@ -742,20 +746,24 @@ function setupPoolImport(team) {
     if (!url) return;
 
     btn.disabled = true;
-    btn.textContent = "...";
-    poolLoadsInFlight++;
-    updatePoolSwapButtons();
+    // L'unico segnale che il click e' stato preso: senza, si tende a
+    // ricliccare (vedi refreshContextTeamOpgg, che per lo stesso motivo
+    // scrive "Aggiornamento..." in un'etichetta). Qui un'etichetta accanto non
+    // c'e', quindi cambia l'icona stessa.
+    btn.textContent = "…";
+    poolLoadsInFlight[team]++;
+    updatePoolButtons();
     let result;
     try {
       result = await backend.fetchOpggTeam(url);
     } finally {
       // finally e non dopo l'await: se la richiesta lancia, il contatore deve
-      // scendere lo stesso, altrimenti lo scambio resterebbe bloccato per
-      // sempre. Stessa cosa per il bottone, che prima restava su "...".
-      poolLoadsInFlight--;
-      updatePoolSwapButtons();
+      // scendere lo stesso, altrimenti scambio e cancellazione resterebbero
+      // bloccati per sempre. Stessa cosa per l'icona, che resterebbe su "…".
+      poolLoadsInFlight[team]--;
+      updatePoolButtons();
       btn.disabled = false;
-      btn.textContent = "Aggiorna";
+      btn.textContent = "🔄";
     }
 
     if (result.error) {
@@ -776,7 +784,7 @@ function setupPoolImport(team) {
 // Scambia gli op.gg fra Blue e Red Side - richiesta esplicita dell'utente
 // (2026-09-11): per simulare la stessa sfida dall'altro lato senza ricopiare
 // i due link a mano. Scambia anche le pool GIA' CARICATE e i filtri attivi,
-// non solo il testo dei campi: altrimenti servirebbero due "Aggiorna", cioe'
+// non solo il testo dei campi: altrimenti servirebbero due 🔄, cioe'
 // due scraping op.gg da diversi secondi l'uno, per ritrovarsi con gli stessi
 // dati di prima.
 //
@@ -784,7 +792,7 @@ function setupPoolImport(team) {
 // speculare ovunque (vedi il tema su Blue e lo slider su Red), e chi prepara
 // una draft guarda il lato su cui sta lavorando, non l'altro.
 function swapPoolSides() {
-  if (poolLoadsInFlight > 0) return; // vedi poolLoadsInFlight
+  if (poolLoadsInFlight.left + poolLoadsInFlight.right > 0) return; // vedi poolLoadsInFlight
 
   const inputLeft = document.getElementById("pool-url-left");
   const inputRight = document.getElementById("pool-url-right");
@@ -817,15 +825,41 @@ function swapPoolSides() {
   refreshSuggestions(); // non await-ata deliberatamente, vedi commento sulla funzione
 }
 
-function updatePoolSwapButtons() {
+// Cancella l'op.gg di un lato - richiesta esplicita dell'utente (2026-09-11).
+// Svuota il campo E scarica pool e filtri di quel lato, per la stessa ragione
+// dello scambio: una pool rimasta caricata sotto un campo vuoto continuerebbe
+// a filtrare la griglia e a guidare i suggerimenti senza che si veda piu' da
+// dove arriva.
+function clearPoolSide(team) {
+  if (poolLoadsInFlight[team] > 0) return; // vedi poolLoadsInFlight
+
+  document.getElementById(`pool-url-${team}`).value = "";
+  teamPools[team] = null;
+  activePoolFilters.delete(team);
+  activePlayerFilters[team] = null;
+
+  renderPoolChip(team); // pool nulla e nessun errore: la chip si svuota, errore compreso
+  renderGrid();
+  refreshSuggestions(); // non await-ata deliberatamente, vedi commento sulla funzione
+}
+
+function updatePoolButtons() {
+  const caricaQualcuno = poolLoadsInFlight.left + poolLoadsInFlight.right > 0;
   for (const team of ["left", "right"]) {
-    document.getElementById(`pool-swap-${team}`).disabled = poolLoadsInFlight > 0;
+    document.getElementById(`pool-swap-${team}`).disabled = caricaQualcuno;
+    document.getElementById(`pool-clear-${team}`).disabled = poolLoadsInFlight[team] > 0;
   }
 }
 
 function setupPoolSwap() {
   for (const team of ["left", "right"]) {
     document.getElementById(`pool-swap-${team}`).addEventListener("click", swapPoolSides);
+  }
+}
+
+function setupPoolClear() {
+  for (const team of ["left", "right"]) {
+    document.getElementById(`pool-clear-${team}`).addEventListener("click", () => clearPoolSide(team));
   }
 }
 
@@ -1835,6 +1869,7 @@ async function init() {
   setupPoolImport("left");
   setupPoolImport("right");
   setupPoolSwap();
+  setupPoolClear();
   await setupContextBar();
   await Promise.all([refreshDetection("left"), refreshDetection("right")]);
 
