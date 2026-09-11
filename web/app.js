@@ -726,6 +726,15 @@ let rosterActiveTier = "S";
 let rosterSearchText = "";
 let rosterRoleFilterOn = true;
 
+// Chiave di ricerca dei campioni: minuscolo e solo lettere e cifre, cosi'
+// "ksante" trova K'Sante, "drmundo" Dr. Mundo e "nunu" Nunu & Willump -
+// richiesta esplicita dell'utente (2026-09-11). Una sola funzione per tutte e
+// tre le ricerche (griglia, roster, editor dei tag): una ricerca che capisce
+// "ksante" in un posto e non in un altro sarebbe peggio di nessuna.
+function searchKey(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function allPickedNames() {
   return [...teams.left, ...teams.right].filter(Boolean);
 }
@@ -1254,7 +1263,7 @@ function renderRosterGrid() {
   const assigned = player ? new Set(Object.values(player.tiers).flat()) : new Set();
 
   const filtered = champions.filter((c) => {
-    if (rosterSearchText && !c.name.toLowerCase().includes(rosterSearchText)) return false;
+    if (rosterSearchText && !searchKey(c.name).includes(rosterSearchText)) return false;
     if (rosterRoleFilterOn && !c.roles.includes(rosterActiveRole)) return false;
     return true;
   });
@@ -1431,8 +1440,8 @@ function closeTagEditorModal() {
 function renderTagEditorChampList() {
   const listEl = document.getElementById("tag-editor-champ-list");
   listEl.innerHTML = "";
-  const search = document.getElementById("tag-editor-search").value.trim().toLowerCase();
-  const filtered = champions.filter((c) => !search || c.name.toLowerCase().includes(search));
+  const search = searchKey(document.getElementById("tag-editor-search").value);
+  const filtered = champions.filter((c) => !search || searchKey(c.name).includes(search));
   for (const champ of filtered) {
     const row = document.createElement("div");
     row.className = "tag-editor-champ-row" + (champ.name === tagEditorSelectedChampion ? " active" : "");
@@ -1589,7 +1598,7 @@ function setupRosterModal() {
   );
 
   document.getElementById("roster-search").addEventListener("input", (e) => {
-    rosterSearchText = e.target.value.toLowerCase();
+    rosterSearchText = searchKey(e.target.value);
     renderRosterGrid();
   });
 
@@ -1882,7 +1891,7 @@ async function init() {
   await Promise.all([refreshDetection("left"), refreshDetection("right")]);
 
   document.getElementById("search").addEventListener("input", (e) => {
-    searchText = e.target.value.toLowerCase();
+    searchText = searchKey(e.target.value);
     renderGrid();
   });
 
@@ -2570,7 +2579,7 @@ function renderGrid() {
   const fearlessSet = new Set(fearlessPicks.map((p) => p.champion));
 
   const filtered = champions.filter((c) => {
-    if (searchText && !c.name.toLowerCase().includes(searchText)) return false;
+    if (searchText && !searchKey(c.name).includes(searchText)) return false;
     if (activeFilters.size > 0 && !c.comps.some((cc) => activeFilters.has(cc)))
       return false;
     if (activeTagFilters.size > 0 && ![...activeTagFilters].every((t) => c.tags.includes(t)))
