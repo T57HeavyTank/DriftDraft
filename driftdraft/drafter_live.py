@@ -116,6 +116,45 @@ def _normalize_role_tag(tag: str | None) -> str | None:
     return tag
 
 
+_champion_name_by_alias_key: dict[str, str] | None = None  # cache pigra, vedi _resolve_fearless_alias
+
+# Gli unici alias di Data Dragon che non sono il nome senza punteggiatura, ma
+# proprio un altro nome. Tutti gli altri (Kaisa, AurelionSol, DrMundo, LeeSin)
+# si riconoscono da soli togliendo spazi, apostrofi e punti.
+_ALIAS_DIVERSI = {"monkeyking": "Wukong", "nunu": "Nunu & Willump", "renata": "Renata Glasc"}
+
+
+def _alias_key(text: str) -> str:
+    return "".join(ch for ch in text.lower() if ch.isalnum())
+
+
+def _resolve_fearless_alias(alias: str | None) -> str | None:
+    """Alias di un campione usato nella serie (img.alt del pannello fearless,
+    vedi fearlessPicks in _STATE_JS) -> nome campione DriftDraft.
+
+    L'alt di drafter.lol NON e' il nome del campione ma l'alias interno di
+    Data Dragon, senza spazi ne' apostrofi: era gia' stato verificato nel DOM
+    reale il 2026-08-17 (vedi _resolve_champion_id: Kai'Sa ha alt="Kaisa").
+    L'integrazione fearless del 2026-08-19 lo aveva dimenticato e usava l'alt
+    cosi' com'era. Per una ventina di campioni (Kai'Sa, Lee Sin, Dr. Mundo,
+    Wukong...) il nome non combaciava con nessun campione: la griglia non li
+    oscurava, il pannello "Usati in serie" li saltava in silenzio e i pick
+    suggeriti li proponevano ancora. Emerso il 2026-09-11 indagando proprio i
+    pick suggeriti, segnalati dall'utente.
+
+    Si confronta senza punteggiatura invece di tenere una tabella a mano, che
+    invecchierebbe a ogni campione nuovo. Un alias sconosciuto torna cosi'
+    com'e': perderlo sarebbe peggio, e a valle un nome che non combacia fa lo
+    stesso danno di prima e non uno nuovo."""
+    global _champion_name_by_alias_key
+    if not alias:
+        return alias
+    if _champion_name_by_alias_key is None:
+        _champion_name_by_alias_key = {_alias_key(c.name): c.name for c in load_champions()}
+    key = _alias_key(alias)
+    return _ALIAS_DIVERSI.get(key) or _champion_name_by_alias_key.get(key, alias)
+
+
 _champion_id_by_name: dict[str, int] | None = None  # cache pigra, vedi _resolve_champion_id
 
 
@@ -865,6 +904,14 @@ class LiveDraftSession:
         # ROLE_ORDER (training_bot.py), unica differenza fra le due etichette.
         payload["blueRoleTags"] = [_normalize_role_tag(r) for r in payload["blueRoleTags"]]
         payload["redRoleTags"] = [_normalize_role_tag(r) for r in payload["redRoleTags"]]
+        # Campioni usati nella serie: l'alt e' un alias di Data Dragon, non il
+        # nome - vedi _resolve_fearless_alias. Qui e non nel chiamante, cosi'
+        # arrivano gia' giusti a tutti: griglia, pannello e pick suggeriti.
+        payload["fearlessPicks"] = [
+            {**p, "champion": _resolve_fearless_alias(p.get("champion"))}
+            for p in payload.get("fearlessPicks") or []
+            if isinstance(p, dict)
+        ]
         payload["connected"] = True
         payload["side"] = self.side
         return payload

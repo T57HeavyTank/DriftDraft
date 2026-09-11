@@ -968,7 +968,13 @@ def api_live_draft_suggestions():
     blue_bans = real(state.get("blueBans"))
     red_bans = real(state.get("redBans"))
 
-    taken = set(blue_picks + red_picks + blue_bans + red_bans)
+    # I campioni presi nelle game precedenti di una fearless draft non si
+    # possono piu' prendere, da nessuna delle due squadre: divieto GLOBALE,
+    # la stessa regola che la griglia applica gia' (vedi renderGrid). Qui
+    # mancavano, e i pick suggeriti continuavano a proporli - segnalato
+    # dall'utente il 2026-09-11. I nomi arrivano gia' risolti da read_state.
+    fearless = real([p.get("champion") for p in (state.get("fearlessPicks") or []) if isinstance(p, dict)])
+    taken = set(blue_picks + red_picks + blue_bans + red_bans + fearless)
 
     try:
         blue_profile = _profile_arg(body, "bluePlayers", _role_counts())
