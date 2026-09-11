@@ -726,6 +726,13 @@ function allBannedNames() {
   return [...bans.left, ...bans.right].filter(Boolean);
 }
 
+// Quanti "Aggiorna" op.gg sono in corso adesso. Serve a bloccare lo scambio
+// Blue/Red mentre uno scraping e' ancora aperto: il risultato si salva sul
+// lato catturato al momento del click, quindi scambiare a meta' caricamento
+// metterebbe il link da una parte e la sua pool dall'altra. Lo scraping dura
+// diversi secondi (Playwright), quindi non e' un caso teorico.
+let poolLoadsInFlight = 0;
+
 function setupPoolImport(team) {
   const input = document.getElementById(`pool-url-${team}`);
   const btn = document.getElementById(`pool-refresh-${team}`);
@@ -736,9 +743,20 @@ function setupPoolImport(team) {
 
     btn.disabled = true;
     btn.textContent = "...";
-    const result = await backend.fetchOpggTeam(url);
-    btn.disabled = false;
-    btn.textContent = "Aggiorna";
+    poolLoadsInFlight++;
+    updatePoolSwapButtons();
+    let result;
+    try {
+      result = await backend.fetchOpggTeam(url);
+    } finally {
+      // finally e non dopo l'await: se la richiesta lancia, il contatore deve
+      // scendere lo stesso, altrimenti lo scambio resterebbe bloccato per
+      // sempre. Stessa cosa per il bottone, che prima restava su "...".
+      poolLoadsInFlight--;
+      updatePoolSwapButtons();
+      btn.disabled = false;
+      btn.textContent = "Aggiorna";
+    }
 
     if (result.error) {
       teamPools[team] = null;
@@ -753,6 +771,62 @@ function setupPoolImport(team) {
     // possono restringersi a quello che quel team gioca davvero.
     refreshSuggestions(); // non await-ata deliberatamente, vedi commento sulla funzione
   });
+}
+
+// Scambia gli op.gg fra Blue e Red Side - richiesta esplicita dell'utente
+// (2026-09-11): per simulare la stessa sfida dall'altro lato senza ricopiare
+// i due link a mano. Scambia anche le pool GIA' CARICATE e i filtri attivi,
+// non solo il testo dei campi: altrimenti servirebbero due "Aggiorna", cioe'
+// due scraping op.gg da diversi secondi l'uno, per ritrovarsi con gli stessi
+// dati di prima.
+//
+// Il bottone c'e' su entrambi i pannelli e fa la stessa cosa: il layout e'
+// speculare ovunque (vedi il tema su Blue e lo slider su Red), e chi prepara
+// una draft guarda il lato su cui sta lavorando, non l'altro.
+function swapPoolSides() {
+  if (poolLoadsInFlight > 0) return; // vedi poolLoadsInFlight
+
+  const inputLeft = document.getElementById("pool-url-left");
+  const inputRight = document.getElementById("pool-url-right");
+  [inputLeft.value, inputRight.value] = [inputRight.value, inputLeft.value];
+
+  // Un errore di caricamento non vive nello stato ma solo nella sua chip:
+  // lo si legge da li' e lo si riscrive dall'altra parte, insieme al link
+  // che l'ha causato. Senza, il link sbagliato cambierebbe lato e l'errore
+  // sparirebbe, facendolo sembrare buono.
+  const erroreDi = (team) =>
+    document.querySelector(`#pool-chip-${team} .pool-chip.error`)?.textContent || null;
+  const erroreLeft = erroreDi("left");
+  const erroreRight = erroreDi("right");
+
+  [teamPools.left, teamPools.right] = [teamPools.right, teamPools.left];
+  [activePlayerFilters.left, activePlayerFilters.right] = [
+    activePlayerFilters.right,
+    activePlayerFilters.left,
+  ];
+  const squadraLeftAttiva = activePoolFilters.has("left");
+  const squadraRightAttiva = activePoolFilters.has("right");
+  activePoolFilters.delete("left");
+  activePoolFilters.delete("right");
+  if (squadraRightAttiva) activePoolFilters.add("left");
+  if (squadraLeftAttiva) activePoolFilters.add("right");
+
+  renderPoolChip("left", erroreRight);
+  renderPoolChip("right", erroreLeft);
+  renderGrid();
+  refreshSuggestions(); // non await-ata deliberatamente, vedi commento sulla funzione
+}
+
+function updatePoolSwapButtons() {
+  for (const team of ["left", "right"]) {
+    document.getElementById(`pool-swap-${team}`).disabled = poolLoadsInFlight > 0;
+  }
+}
+
+function setupPoolSwap() {
+  for (const team of ["left", "right"]) {
+    document.getElementById(`pool-swap-${team}`).addEventListener("click", swapPoolSides);
+  }
 }
 
 function renderPoolChip(team, errorMessage) {
@@ -1760,6 +1834,7 @@ async function init() {
   setupTagEditorModal();
   setupPoolImport("left");
   setupPoolImport("right");
+  setupPoolSwap();
   await setupContextBar();
   await Promise.all([refreshDetection("left"), refreshDetection("right")]);
 
