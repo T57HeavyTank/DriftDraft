@@ -912,11 +912,22 @@ def api_pick_suggestions():
 
     blue_comps, red_comps = _comp_flags(body, lato_nostro)
 
+    # La fearless di una serie di allenamento, per la stessa ragione del
+    # profilo del bot qui sopra: il dato sta nella sessione e non nei pannelli.
+    # Senza, i pick suggeriti proporrebbero campioni che ne' il trainee ne' il
+    # bot possono piu' prendere - lo stesso difetto appena corretto in
+    # modalita' torneo (vedi api_live_draft_suggestions).
+    esclusi = set(taken)
+    if body.get("useTrainingBotProfile"):
+        sessione_serie = training_bot.get_session()
+        if sessione_serie:
+            esclusi |= sessione_serie.series_champions()
+
     try:
         ranked = training_bot.rank_pick_suggestions(
             blue_picks,
             red_picks,
-            set(taken),
+            esclusi,
             blue_profile=blue_profile,
             red_profile=red_profile,
             blue_comps=blue_comps,
@@ -1249,6 +1260,12 @@ def api_training_start():
     team = str(body.get("team", "")).strip() or None
     enemy_team_url = str(body.get("enemy_team_url", "")).strip()
     response.content_type = "application/json"
+    # Quante game: 1 (partita singola, il default di sempre), 3 o 5. Quali
+    # valori sono ammessi lo decide start_session, qui si controlla il tipo.
+    try:
+        series = int(body.get("series") or 1)
+    except (TypeError, ValueError):
+        return json.dumps({"error": "Formato della serie non valido."})
 
     bot_profile = None
     if enemy_team_url:
@@ -1286,7 +1303,9 @@ def api_training_start():
             return json.dumps({"error": "Nessun campione trovato per la squadra avversaria indicata."})
 
     try:
-        session = training_bot.start_session(mode, side, bot_profile=bot_profile, team=team)
+        session = training_bot.start_session(
+            mode, side, bot_profile=bot_profile, team=team, series_games=series
+        )
     except ValueError as e:
         return json.dumps({"error": str(e)})
     except Exception as e:
@@ -1331,6 +1350,22 @@ def api_training_stop():
     training_bot.stop_session()
     response.content_type = "application/json"
     return json.dumps({"active": False})
+
+
+@app.post("/api/training/next-game")
+def api_training_next_game():
+    """Game successiva di una serie fearless (vedi training_bot.next_game): il
+    client manda solo il lato, il resto lo porta la sessione."""
+    body = request.json or {}
+    side = str(body.get("side", "")).strip()
+    response.content_type = "application/json"
+    try:
+        session = training_bot.next_game(side)
+    except ValueError as e:
+        return json.dumps({"error": str(e)})
+    except Exception as e:
+        return json.dumps({"error": f"Errore durante il passaggio alla game successiva: {e}"})
+    return json.dumps(session.state(), ensure_ascii=False)
 
 
 @app.post("/api/training/rewind")

@@ -185,6 +185,18 @@ class TrainingSession:
     # distingue un cavallo di battaglia da un campione toccato una volta - e
     # il bot poteva pescare il campione del toplaner in bot lane.
     bot_profile: dict | None = None
+    # Serie fearless (richiesta esplicita dell'utente 2026-09-11): quante game
+    # (1 = partita singola, il comportamento di sempre; 3 o 5 = Bo3/Bo5) e
+    # quale si sta giocando. Si giocano TUTTE: una draft di allenamento non ha
+    # un vincitore che chiuda la serie prima, e fermarsi resta compito di
+    # "Termina allenamento" (scelta dell'utente).
+    series_games: int = 1
+    game: int = 1
+    # I pick delle game GIA' giocate, {side, game, champion}: stessa forma di
+    # fearlessPicks in modalita' torneo (vedi _STATE_JS in drafter_live.py),
+    # cosi' la UI li mostra e li oscura con lo stesso codice. Solo i pick e
+    # non i ban: e' la regola fearless vera, la stessa del torneo.
+    series_used: list = field(default_factory=list)
 
     def __post_init__(self):
         if self.picks is None:
@@ -210,12 +222,23 @@ class TrainingSession:
         for side in ("team1", "team2"):
             taken.update(c for c in self.picks[side] if c)
             taken.update(c for c in self.bans[side] if c)
+        # Fearless: vale per entrambi i punti che chiamano questa funzione, la
+        # scelta del trainee e quella del bot, quindi nessuno dei due puo'
+        # riprendere (ne' bannare) un campione gia' usato nella serie.
+        taken.update(self.series_champions())
         return taken
+
+    def series_champions(self) -> set[str]:
+        return {e["champion"] for e in self.series_used}
 
     def apply_trainee_action(self, champion: str) -> None:
         action = self.current_action()
         if not action or action[1] != self.trainee_side:
             raise ValueError("Non e' il tuo turno.")
+        # Prima la fearless: "gia' preso in questa draft" per un campione preso
+        # due game fa sarebbe un messaggio che mente.
+        if champion in self.series_champions():
+            raise ValueError("Campione gia' usato in questa serie (fearless).")
         if champion in self.all_taken():
             raise ValueError("Campione gia' preso o bannato in questa draft.")
         valid_names = {c.name for c in load_champions()}
@@ -524,6 +547,14 @@ class TrainingSession:
             # altrimenti vedrebbe solo un roster dedotto senza sapere quali
             # righe sono un'ipotesi e quali un dato.
             "botConfidence": (self.bot_profile or {}).get("confidence") or None,
+            # Serie fearless: formato, game in corso e campioni gia' usati (vedi
+            # series_used). nextGame e' il numero della game successiva solo a
+            # draft finita e con una game ancora da giocare, altrimenti None:
+            # e' l'unico segnale che serve alla UI per offrire di proseguire.
+            "seriesGames": self.series_games,
+            "game": self.game,
+            "fearlessPicks": self.series_used,
+            "nextGame": self.game + 1 if (finished and self.game < self.series_games) else None,
         }
 
 
@@ -1694,6 +1725,7 @@ def start_session(
     side: str,
     bot_profile: dict | None = None,
     team: str | None = None,
+    series_games: int = 1,
 ) -> TrainingSession:
     """`team`: in modalita' "team", quale squadra pro impersonare. None = a
     sorte fra quelle disponibili, che e' una delle due scelte offerte
@@ -1703,6 +1735,8 @@ def start_session(
         raise ValueError("Modalita' non valida.")
     if side not in ("blue", "red"):
         raise ValueError("Lato non valido.")
+    if series_games not in (1, 3, 5):
+        raise ValueError("Formato della serie non valido: sono ammesse 1, 3 o 5 game.")
 
     tables = leaguepedia.load_tables()
     if not tables.get("pick_counts"):
@@ -1738,6 +1772,7 @@ def start_session(
         tables=tables,
         bot_team=bot_team,
         bot_profile=bot_profile,
+        series_games=series_games,
     )
     with _lock:
         session._advance_bot()  # se il bot e' team1 (blue), agisce per primo nel Ban Phase 1
@@ -1753,6 +1788,49 @@ def stop_session() -> None:
     global _session
     with _lock:
         _session = None
+
+
+def next_game(side: str) -> TrainingSession:
+    """Game successiva di una serie fearless: stesso avversario, lato scelto di
+    nuovo ("il side si sceglie andando al match successivo", richiesta
+    esplicita dell'utente 2026-09-11) e i pick della game appena finita
+    aggiunti ai campioni che nessuno puo' piu' prendere.
+
+    Stessa squadra e stesso profilo della game prima, non uno nuovo: in
+    "Casuale" la squadra si estrae una volta per serie, e un op.gg non si
+    riscarica - sarebbero secondi di scraping per ottenere gli stessi dati."""
+    global _session
+    if side not in ("blue", "red"):
+        raise ValueError("Lato non valido.")
+    with _lock:
+        prima = _session
+        if prima is None:
+            raise ValueError("Nessun allenamento in corso.")
+        if prima.current_action() is not None:
+            raise ValueError("La draft in corso non e' ancora finita.")
+        if prima.game >= prima.series_games:
+            raise ValueError("La serie e' gia' finita.")
+
+        usati = list(prima.series_used)
+        for interno, colore in (("team1", "blue"), ("team2", "red")):
+            usati.extend(
+                {"side": colore, "game": prima.game, "champion": c}
+                for c in prima.picks[interno]
+                if c
+            )
+        dopo = TrainingSession(
+            mode=prima.mode,
+            trainee_side="team1" if side == "blue" else "team2",
+            tables=prima.tables,
+            bot_team=prima.bot_team,
+            bot_profile=prima.bot_profile,
+            series_games=prima.series_games,
+            game=prima.game + 1,
+            series_used=usati,
+        )
+        dopo._advance_bot()  # se il bot e' blue, apre lui il Ban Phase 1, come in start_session
+        _session = dopo
+    return dopo
 
 
 def apply_pick(champion: str) -> TrainingSession:

@@ -155,6 +155,11 @@
     <div id="training-status" class="hidden">
       <span id="training-step"></span>
       <span id="training-info"></span>
+      <span id="training-next-game" class="hidden">
+        <span id="training-next-label"></span>
+        <button id="training-next-blue" title="Gioca la game successiva della serie da Blue Side">Blue Side</button>
+        <button id="training-next-red" title="Gioca la game successiva della serie da Red Side">Red Side</button>
+      </span>
       <button id="training-stop">Termina allenamento</button>
     </div>
     <div id="toolbar">
@@ -464,6 +469,15 @@
         </div>
       </div>
       <p class="tournament-warning" id="training-team-hint"></p>
+    </div>
+
+    <!-- Serie fearless (richiesta esplicita dell'utente 2026-09-11): si
+         giocano tutte le game, perche' una draft di allenamento non ha un
+         vincitore che chiuda la serie prima. Il lato si risceglie a ogni game. -->
+    <div class="row-with-buttons">
+      <button id="training-series-1" class="tournament-side-btn">Partita singola</button>
+      <button id="training-series-3" class="tournament-side-btn">Bo3 fearless</button>
+      <button id="training-series-5" class="tournament-side-btn">Bo5 fearless</button>
     </div>
 
     <div class="row-with-buttons">

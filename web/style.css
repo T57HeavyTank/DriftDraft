@@ -1602,6 +1602,53 @@ body {
   box-shadow: var(--nm-in-sm);
 }
 
+/* Game successiva di una serie fearless: compare solo a draft finita e con una
+   game ancora da giocare (vedi updateTrainingStatusBar), accanto a "Termina
+   allenamento" e con lo stesso aspetto. .hidden va dichiarato per id: in
+   questo file non c'e' una regola .hidden globale. */
+#training-next-game {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#training-next-game.hidden {
+  display: none;
+}
+
+#training-next-label {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+#training-next-game button {
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--nm-out-sm);
+  padding: 4px 10px;
+  color: var(--sky-mid);
+  font-size: 11px;
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+#training-next-game button:hover:not(:disabled) {
+  color: var(--sky-light);
+  box-shadow: var(--nm-out);
+}
+
+#training-next-game button:active:not(:disabled) {
+  box-shadow: var(--nm-in-sm);
+}
+
+#training-next-game button:disabled {
+  box-shadow: none;
+  background: var(--nm-surface-lo);
+  color: var(--nm-text-disabled);
+  cursor: default;
+}
+
 #training-sync-status {
   font-size: 12px;
   color: var(--text-dim);

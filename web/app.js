@@ -44,12 +44,13 @@ const backend = window.pywebview
       trainingStatus: () => window.pywebview.api.training_status(),
       trainingSync: () => window.pywebview.api.training_sync(),
       trainingSyncProgress: () => window.pywebview.api.training_sync_progress(),
-      trainingStart: (mode, side, enemyTeamUrl, team) =>
-        window.pywebview.api.training_start(mode, side, enemyTeamUrl, team),
+      trainingStart: (mode, side, enemyTeamUrl, team, series) =>
+        window.pywebview.api.training_start(mode, side, enemyTeamUrl, team, series),
       trainingTeams: () => window.pywebview.api.training_teams(),
       trainingPick: (champion) => window.pywebview.api.training_pick(champion),
       trainingState: () => window.pywebview.api.training_state(),
       trainingStop: () => window.pywebview.api.training_stop(),
+      trainingNextGame: (side) => window.pywebview.api.training_next_game(side),
       trainingRewind: (step) => window.pywebview.api.training_rewind(step),
       trainingAssignRoles: (order) => window.pywebview.api.training_assign_roles(order),
       trainingEvaluate: (tier) => window.pywebview.api.training_evaluate(tier),
@@ -197,11 +198,11 @@ const backend = window.pywebview
       trainingSync: () => fetch("/api/training/sync", { method: "POST" }).then((r) => r.json()),
       trainingSyncProgress: () => fetch("/api/training/sync-progress").then((r) => r.json()),
       trainingTeams: () => fetch("/api/training/teams").then((r) => r.json()),
-      trainingStart: (mode, side, enemyTeamUrl, team) =>
+      trainingStart: (mode, side, enemyTeamUrl, team, series) =>
         fetch("/api/training/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode, side, enemy_team_url: enemyTeamUrl, team }),
+          body: JSON.stringify({ mode, side, enemy_team_url: enemyTeamUrl, team, series }),
         }).then((r) => r.json()),
       trainingPick: (champion) =>
         fetch("/api/training/pick", {
@@ -211,6 +212,12 @@ const backend = window.pywebview
         }).then((r) => r.json()),
       trainingState: () => fetch("/api/training/state").then((r) => r.json()),
       trainingStop: () => fetch("/api/training/stop", { method: "POST" }).then((r) => r.json()),
+      trainingNextGame: (side) =>
+        fetch("/api/training/next-game", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ side }),
+        }).then((r) => r.json()),
       trainingRewind: (step) =>
         fetch("/api/training/rewind", {
           method: "POST",
@@ -671,6 +678,7 @@ let trainingModeSelected = null; // "team" | "freeform" scelto nel modale, prima
 let trainingTeamSelected = "";
 let trainingTeamsCache = null; // elenco da /api/training/teams, caricato una volta
 let trainingSideSelected = null; // "blue" | "red" scelto nel modale
+let trainingSeriesSelected = 1; // 1 | 3 | 5 game scelte nel modale (serie fearless)
 // Campione cliccato in griglia ma non ancora confermato (vedi
 // selectTrainingPending/confirmTrainingPick) - richiesta esplicita
 // dell'utente 2026-08-26: un click non deve piu' bannare/pickare subito,
@@ -2686,7 +2694,18 @@ function renderGrid() {
 // cliccando il suo slot; i bannati non compaiono proprio in griglia, questo
 // controllo e' solo un'assicurazione in piu').
 function placeChampion(name) {
-  if (allPickedNames().includes(name) || allBannedNames().includes(name)) return;
+  // Stessa condizione con cui renderGrid oscura una carta (vedi isUnavailable),
+  // quindi anche i campioni gia' usati in una serie fearless. Senza, una carta
+  // grigia restava cliccabile: in allenamento la si selezionava e il server la
+  // rifiutava solo alla conferma, con un alert. Trovato provando la serie Bo3
+  // (2026-09-11). Vale anche per il torneo, dove il buco c'era gia'.
+  if (
+    allPickedNames().includes(name) ||
+    allBannedNames().includes(name) ||
+    fearlessPicks.some((p) => p.champion === name)
+  ) {
+    return;
+  }
 
   // Modalita' torneo connessa: un click in griglia non tocca mai lo stato
   // locale direttamente - invia (o ignora, se non e' il nostro turno) la
@@ -4319,6 +4338,13 @@ function selectTrainingSide(side) {
   document.getElementById("training-side-red").classList.toggle("active", side === "red");
 }
 
+function selectTrainingSeries(games) {
+  trainingSeriesSelected = games;
+  for (const n of [1, 3, 5]) {
+    document.getElementById(`training-series-${n}`).classList.toggle("active", n === games);
+  }
+}
+
 // Bot: {kind, champion} dell'ultima mossa, o null - Ancora: torneo/team/patch
 // della draft pro di riferimento in modalita' "ancorata", null in "libera".
 function updateTrainingStatusBar() {
@@ -4342,6 +4368,23 @@ function updateTrainingStatusBar() {
       : "Tocca a te: scegli";
   } else {
     stepEl.textContent = "Turno del bot";
+  }
+
+  // Serie fearless: la game in corso davanti a tutto, e a fine serie
+  // "completata" al posto di "draft completata" - sono due fini diverse, e
+  // solo la prima ha una game dopo.
+  if (trainingState.seriesGames > 1) {
+    stepEl.textContent =
+      trainingState.finished && !trainingState.nextGame
+        ? `Serie completata · ${trainingState.seriesGames} game`
+        : `Game ${trainingState.game}/${trainingState.seriesGames} · ${stepEl.textContent}`;
+  }
+  document.getElementById("training-next-game").classList.toggle("hidden", !trainingState.nextGame);
+  if (trainingState.nextGame) {
+    document.getElementById("training-next-label").textContent = `Game ${trainingState.nextGame}:`;
+    for (const id of ["training-next-blue", "training-next-red"]) {
+      document.getElementById(id).disabled = trainingBusy;
+    }
   }
 
   const parts = [];
@@ -4496,6 +4539,11 @@ function applyTrainingState(state) {
   teams.right = state.redPicks;
   bans.left = state.blueBans;
   bans.right = state.redBans;
+  // Serie fearless: stessa variabile e stesso pannello della modalita' torneo,
+  // cosi' griglia oscurata e "Usati in serie" funzionano senza codice nuovo.
+  // Fuori da una serie il server manda una lista vuota.
+  fearlessPicks = state.fearlessPicks || [];
+  renderFearlessPanel();
 
   if (!state.finished) {
     // La draft puo' "tornare non finita" con un rewind - un ordine ruoli o
@@ -5492,7 +5540,8 @@ async function startTraining() {
     trainingModeSelected,
     trainingSideSelected,
     enemyTeamUrl,
-    team
+    team,
+    trainingSeriesSelected
   );
   if (result.error) {
     statusEl.textContent = result.error;
@@ -5512,6 +5561,27 @@ async function startTraining() {
   applyTrainingState(result);
 }
 
+// Game successiva di una serie fearless: si sceglie solo il lato, il resto
+// (avversario, formato, campioni gia' usati) lo porta il server - vedi
+// training_bot.next_game.
+async function nextTrainingGame(side) {
+  if (trainingBusy) return;
+  trainingBusy = true;
+  updateTrainingStatusBar();
+  const result = await backend.trainingNextGame(side);
+  trainingBusy = false;
+  if (result.error) {
+    alert(result.error);
+    updateTrainingStatusBar();
+    return;
+  }
+  trainingPendingChampion = null;
+  trainingRoleOrder = null;
+  trainingEvaluation = null;
+  activeSlot = null;
+  applyTrainingState(result);
+}
+
 async function stopTraining() {
   trainingConnected = false;
   trainingState = null;
@@ -5519,6 +5589,8 @@ async function stopTraining() {
   trainingBusy = false;
   trainingRoleOrder = null;
   trainingEvaluation = null;
+  fearlessPicks = [];
+  renderFearlessPanel();
   document.getElementById("training-mode-open").classList.remove("training-active");
   document.getElementById("training-status").classList.add("hidden");
   document.getElementById("tournament-mode-open").disabled = false;
@@ -5541,6 +5613,7 @@ function setupTrainingMode() {
     document.getElementById("training-team-combo").value = "";
     document.getElementById("training-side-blue").classList.remove("active");
     document.getElementById("training-side-red").classList.remove("active");
+    selectTrainingSeries(1);
     openTrainingModal();
   });
   document.getElementById("training-close").addEventListener("click", closeTrainingModal);
@@ -5555,6 +5628,11 @@ function setupTrainingMode() {
   document.getElementById("training-side-red").addEventListener("click", () => selectTrainingSide("red"));
   document.getElementById("training-start").addEventListener("click", startTraining);
   document.getElementById("training-stop").addEventListener("click", stopTraining);
+  for (const n of [1, 3, 5]) {
+    document.getElementById(`training-series-${n}`).addEventListener("click", () => selectTrainingSeries(n));
+  }
+  document.getElementById("training-next-blue").addEventListener("click", () => nextTrainingGame("blue"));
+  document.getElementById("training-next-red").addEventListener("click", () => nextTrainingGame("red"));
   document.getElementById("training-confirm").addEventListener("click", () => {
     // Stesso bottone, due scopi (richiesto esplicitamente dall'utente
     // 2026-08-26) - durante la draft conferma il pick selezionato, a draft
