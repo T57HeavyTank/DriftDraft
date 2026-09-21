@@ -34,14 +34,20 @@ vince chi somiglia di piu' caso per caso.
 
 import io
 import re
-from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
+from driftdraft.paths import get_app_dir
 from driftdraft.roster import TIERS
 
-TIERMAKER_REFS_DIR = Path(__file__).resolve().parent.parent / "assets" / "tiermaker_refs"
+# get_app_dir() e non Path(__file__): nell'eseguibile PyInstaller __file__
+# punta dentro _internal/, mentre driftdraft.spec copia assets/ ACCANTO
+# all'exe (vedi paths.py). BUG REALE segnalato da piu' utenti (issue #2,
+# 2026-09-19): nel pacchetto distribuito la cartella risultava vuota e il
+# rilevamento falliva con QUALUNQUE immagine ("need at least one array to
+# stack") - da sorgente i due percorsi coincidono, per questo non si vedeva.
+TIERMAKER_REFS_DIR = get_app_dir() / "assets" / "tiermaker_refs"
 
 THUMB_SIZE = 32
 MIN_SIMILARITY = 0.55
