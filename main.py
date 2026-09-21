@@ -36,7 +36,7 @@ if getattr(sys, "frozen", False):
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = os.path.join(sys._MEIPASS, "ms-playwright")
 
 PORT = 8721
-VERSION = "2.0"
+VERSION = "2.1"
 
 
 def main():
