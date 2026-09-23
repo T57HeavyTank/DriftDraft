@@ -1551,7 +1551,12 @@ async function resetTagEditorChampion() {
 }
 
 function setupTagEditorModal() {
-  document.getElementById("edit-tags-open").addEventListener("click", openTagEditorModal);
+  // Il bottone sta nelle Impostazioni: si chiudono prima di aprire l'editor,
+  // altrimenti restano due modali uno sopra l'altro.
+  document.getElementById("edit-tags-open").addEventListener("click", () => {
+    document.getElementById("settings-modal").classList.add("hidden");
+    openTagEditorModal();
+  });
   document.getElementById("tag-editor-close").addEventListener("click", closeTagEditorModal);
   document.getElementById("tag-editor-search").addEventListener("input", renderTagEditorChampList);
   document.getElementById("tag-editor-save").addEventListener("click", saveTagEditorChampion);

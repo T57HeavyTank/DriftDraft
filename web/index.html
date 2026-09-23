@@ -305,16 +305,6 @@
         <div id="comp-status-2"></div>
       </div>
     </div>
-    <!-- Era "Bordi comp": l'interruttore e' diventato "Lavoro per comp" nelle
-         Impostazioni, qui resta l'editor dei tag. -->
-    <div class="panel">
-      <div class="panel-title-row">
-        <h2>Tag campioni</h2>
-        <div class="panel-title-row-controls">
-          <button id="edit-tags-open" title="Modifica comp/tag/ruoli di un campione senza dover usare Excel">🏷️ Modifica tag</button>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -567,6 +557,15 @@
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </span>
         </label>
+        <!-- Era il pannello "Bordi comp" in fondo alla colonna destra: spostato
+             qui l'interruttore, il bottone restava da solo ("non ha senso che
+             rimane da solo li'", utente 2026-09-23). -->
+        <div class="settings-row">
+          <span class="settings-name">Tag campioni
+            <span class="settings-note">Comp, tag e ruoli di ogni campione, senza passare da Excel</span>
+          </span>
+          <button type="button" id="edit-tags-open">Modifica tag</button>
+        </div>
         <label class="settings-row">
           <span class="settings-name">Pick e ban suggeriti</span>
           <span class="toggle-switch">

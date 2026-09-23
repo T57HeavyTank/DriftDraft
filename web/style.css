@@ -1155,45 +1155,22 @@ body {
   gap: 12px;
 }
 
-/* "Bordi comp"/"Modifica tag" spostati QUI, fuori dalla toolbar principale
-   sopra la griglia (richiesto esplicitamente dall'utente 2026-08-27/28, con
-   uno screenshot annotato: "vorrei spostare i due tasti in questa posizione
-   in modo da non creare troppa confusione con il cluttering dei tag") - non
-   sono filtri come il resto della toolbar (ricerca/ruolo/counter corsia),
-   sono preferenze di aspetto/amministrazione, meglio separate visivamente.
-
-   BUG REALE trovato dall'utente subito dopo il primo tentativo (screenshot
-   reale, finestra 1920x1080): #champion-grid ha flex:1 dentro #main, ma
-   #main stesso NON e' vincolato ai 100vh di #app (nessun grid-template-rows
-   esplicito su #app - la riga implicita cresce quanto serve al contenuto,
-   e con l'icon-scale corrente 173 campioni superano facilmente 1000px) -
-   quindi non e' #champion-grid a scorrere internamente, e' l'INTERA pagina
-   a crescere oltre la finestra. Un fratello messo dopo #champion-grid nel
-   flusso normale finiva percio' scaricato in fondo a tutto quel contenuto,
-   ben oltre il fondo visibile - "completamente sbagliata" (verificato:
-   #main risultava alto 2314px contro i 1000px di #app, un vero bug di
-   layout preesistente mai emerso prima perche' finora dopo la griglia non
-   c'era mai stato nulla di importante da dover rintracciare). Sistemare
-   davvero l'intera catena di altezze #app->#main->#champion-grid e' un
-   refactor piu' grande di quanto serva qui - fix mirato: position:sticky
-   in fondo al VIEWPORT (bottom:0), cosi' resta raggiungibile scorrendo la
-   pagina qualunque sia il vero contenitore che scorre, senza dover
-   raddrizzare tutta la gerarchia di altezze sopra. */
-.panel-title-row-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-}
-
+/* "Modifica tag" sta nelle Impostazioni dal 2026-09-23, con la stessa forma
+   di "Aggiorna dati" ("non ha senso che rimane da solo li'", utente). Prima
+   stava con "Bordi comp" in un pannello a parte (richiesta 2026-08-27/28, per
+   toglierli dalla toolbar dei filtri), e li' era emerso un difetto di layout
+   che resta: #app non ha grid-template-rows, quindi la sua riga cresce fin
+   quanto la griglia campioni (2314px misurati allora) e a scorrere e' l'intera
+   pagina, non #champion-grid. Raddrizzare la catena #app->#main->
+   #champion-grid e' un refactor a se'; intanto chi deve restare a vista si
+   ancora alla finestra (vedi #rail). */
 #edit-tags-open {
   flex: none;
-  height: 20px;
   background: var(--nm-surface);
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   box-shadow: var(--nm-out-sm);
-  padding: 0 8px;
+  padding: 5px 12px;
   color: var(--sky-mid);
   font-size: 11px;
   cursor: pointer;
