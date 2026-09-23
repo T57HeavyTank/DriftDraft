@@ -448,9 +448,37 @@ let contextTierThreshold = null;
 // "blue"/"red" scelto a mano per la MODALITA' LIBERA, null se non ancora
 // deciso. Serve solo li': in allenamento il lato e' quello del trainee, in
 // torneo quello connesso, e in entrambi i casi e' un dato autorevole che non
-// va chiesto ne' indovinato. Si azzera ad ogni cambio di team - una scelta
-// fatta per una squadra non vuol dire niente per un'altra.
+// va chiesto ne' indovinato.
+//
+// Dal 2026-09-23 si RICORDA, come le altre impostazioni: col team di default
+// caricato ad ogni avvio, la domanda "da che lato giochi" arrivava ad ogni
+// avvio. Ora compare solo finche' il lato non e' mai stato scelto (anche
+// "Decido dopo" non lo sceglie). Ricordato PER TEAM: una scelta fatta per una
+// squadra non vuol dire niente per un'altra.
 let contextTeamSide = null;
+const CONTEXT_SIDES_KEY = "contextTeamSides";
+
+function latoRicordato(team) {
+  try {
+    const lati = JSON.parse(localStorage.getItem(CONTEXT_SIDES_KEY) || "{}");
+    return lati[team] === "blue" || lati[team] === "red" ? lati[team] : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function ricordaLato(team, lato) {
+  if (!team) return;
+  let lati = {};
+  try {
+    lati = JSON.parse(localStorage.getItem(CONTEXT_SIDES_KEY) || "{}") || {};
+  } catch (e) {
+    lati = {};
+  }
+  if (lato) lati[team] = lato;
+  else delete lati[team];
+  localStorage.setItem(CONTEXT_SIDES_KEY, JSON.stringify(lati));
+}
 // Caricamento della pool op.gg dei titolari, che parte da solo quando il team
 // di default entra in scena (all'avvio o scelto nel roster): i nomi restano
 // spenti finche' dura, e un errore finisce nel loro tooltip invece che in un
@@ -1041,6 +1069,13 @@ async function saveRosterDraft() {
     if (renameResult.error) {
       alert(renameResult.error);
       return false;
+    }
+    // Il lato ricordato segue il team col suo nome nuovo (vedi ricordaLato),
+    // altrimenti la domanda "da che lato giochi" tornerebbe come la prima volta.
+    const latoPrima = latoRicordato(rosterCurrentProfileName);
+    if (latoPrima) {
+      ricordaLato(newName, latoPrima);
+      ricordaLato(rosterCurrentProfileName, null);
     }
   }
 
@@ -2371,7 +2406,7 @@ async function selectContextTeam(nome) {
   contextPlayerKey = null;
   contextTierThreshold = null;
   contextTeamOpggData = null;
-  contextTeamSide = null;
+  contextTeamSide = nome ? latoRicordato(nome) : null;
   contextOpggNote = "";
   contextTeamData = nome ? await backend.getRosterProfile(nome) : null;
   renderContextPlayerFilters();
@@ -2396,6 +2431,7 @@ async function setupContextBar() {
       // Ripremere il lato gia' scelto lo toglie: "non lo so ancora" e' una
       // risposta legittima, la stessa di "Decido dopo" nella domanda.
       contextTeamSide = contextTeamSide === lato ? null : lato;
+      ricordaLato(contextTeamName, contextTeamSide);
       renderContextSideChip();
       refreshSuggestions();
     });
@@ -2504,6 +2540,7 @@ async function chiediLatoSeServe(teamAtteso) {
   const scelta = await askContextSide(teamAtteso);
   if (contextTeamName !== teamAtteso) return; // cambiato mentre era aperto
   contextTeamSide = scelta;
+  ricordaLato(teamAtteso, scelta);
   renderContextSideChip();
   refreshSuggestions();
 }
