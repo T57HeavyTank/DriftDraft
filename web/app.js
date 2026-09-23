@@ -2930,42 +2930,42 @@ function renderCounterButton(slot, champ) {
 
     // Appeso al BODY, non allo slot: `.team-slot.filled` ha overflow:hidden
     // (serve alla splash art ritagliata) e faceva sparire il popover, che si
-    // apre appena sotto lo slot - vedi il commento esteso su
+    // apre fuori dallo slot - vedi il commento esteso su
     // .counter-role-popover in style.css. Va appeso PRIMA di posizionarlo:
     // fuori dal DOM la sua altezza misurata sarebbe 0, e openCounterPopover
-    // ha bisogno di quella vera per decidere se aprirsi sopra o sotto.
+    // ha bisogno di quella vera per centrarlo sul bottone.
     document.body.appendChild(popover);
-    openCounterPopover(slot, popover);
+    openCounterPopover(slot, popover, btn);
   });
 
   slot.appendChild(btn);
 }
 
 // Posiziona il popover della corsia (position:fixed, quindi in coordinate
-// viewport) sotto lo slot che l'ha aperto, o sopra se sotto non ci sta -
-// stessa logica, e stesse ragioni, di openSaveDraftPopover() qui sotto.
-// Allineato al bordo DESTRO dello slot, che e' dove stava con il vecchio
-// `right: 0` da discendente assoluto: il bottone 🔍 e' nell'angolo in alto a
-// destra, e da li' il popover si estende verso sinistra restando dentro il
-// pannello su entrambi i lati.
-function openCounterPopover(slot, popover) {
-  const rect = slot.getBoundingClientRect();
-  const popoverHeight = popover.getBoundingClientRect().height;
-  if (rect.bottom + 4 + popoverHeight <= window.innerHeight) {
-    popover.style.top = `${rect.bottom + 4}px`;
-    popover.style.bottom = "auto";
-  } else {
-    popover.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-    popover.style.top = "auto";
-  }
-  // Si apre dal lato del bottone: a destra sul Blue Side, a sinistra sul
-  // Red Side, dove il bottone sta nell'angolo sinistro (specchio, 2026-09-23).
+// viewport) ACCANTO al bottone 🔍 che l'ha aperto: a destra sul Blue Side, a
+// sinistra sul Red Side, dove il bottone sta nell'angolo sinistro (specchio),
+// centrato in altezza sul bottone. Fino al 2026-09-23 si apriva sotto lo
+// slot, allineato al suo bordo: "e' un po' lontano e sembra scollegato da
+// quello che si e' selezionato poco prima" (utente, con screenshot). Esce
+// dal pannello e copre il bordo della griglia, ed e' voluto: e' un menu di
+// un attimo, e stando attaccato al bottone si capisce da dove viene.
+function openCounterPopover(slot, popover, btn) {
+  const rect = (btn || slot).getBoundingClientRect();
+  const alto = popover.getBoundingClientRect().height;
+  const margine = 8;
+  // Centrato sul bottone, ma sempre dentro la finestra.
+  const top = Math.min(Math.max(rect.top + rect.height / 2 - alto / 2, margine), window.innerHeight - alto - margine);
+  popover.style.top = `${top}px`;
+  popover.style.bottom = "auto";
   if (slot.closest("#team-slots-2")) {
-    popover.style.left = `${rect.left}px`;
-    popover.style.right = "auto";
-  } else {
-    popover.style.right = `${window.innerWidth - rect.right}px`;
+    // clientWidth e non innerWidth: `right` di un elemento fisso si misura
+    // dal bordo SENZA la barra di scorrimento, che qui c'e' quasi sempre
+    // (scorre l'intera pagina) - con innerWidth lo stacco era 20px invece di 8.
+    popover.style.right = `${document.documentElement.clientWidth - rect.left + margine}px`;
     popover.style.left = "auto";
+  } else {
+    popover.style.left = `${rect.right + margine}px`;
+    popover.style.right = "auto";
   }
 }
 
