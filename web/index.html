@@ -128,21 +128,6 @@
   </div>
 
   <div id="main">
-    <div id="context-bar">
-      <select id="context-team-select">
-        <option value="">Nessun team selezionato</option>
-      </select>
-      <button type="button" id="context-team-opgg-refresh" class="icon-btn" title="Ricarica la pool op.gg dei titolari del roster (clicca poi il tag di un giocatore per vederla)">🔄</button>
-      <span id="context-team-opgg-status"></span>
-      <!-- Solo in modalita' libera: li' il lato non e' ricavabile da nessuna
-           parte (in allenamento e' quello del trainee, in torneo quello
-           connesso) e va chiesto. Cliccabile per cambiarlo senza dover
-           riselezionare il team. -->
-      <button type="button" id="context-side-chip" class="context-side-chip hidden"></button>
-      <div id="context-player-filters"></div>
-    </div>
-
-    <div id="context-tier-filters" class="hidden"></div>
 
     <div id="tournament-status" class="hidden">
       <!-- Riempimento del timer: una striscia che occupa TUTTA la barra di
@@ -182,6 +167,14 @@
         <button type="button" id="lane-counter-toggle" class="toggle-chip" title="Usa i counter di corsia (differenza oro a 15 minuti, da u.gg) invece del winrate generale (lolalytics)">Counter corsia</button>
       </div>
     </div>
+    <!-- I giocatori del team di default, SOTTO la ricerca (2026-09-23). Prima
+         stavano in una barra sopra, con il menu per scegliere il team, il
+         bottone per ricaricare op.gg e il lato: il team ora si sceglie come
+         "team di default" in Modifica il tuo team e si carica da solo
+         all'avvio, op.gg compreso; il lato sta nelle Impostazioni. Qui restano
+         solo i nomi. -->
+    <div id="context-player-filters"></div>
+    <div id="context-tier-filters" class="hidden"></div>
     <div id="champion-grid"></div>
 
     <!-- Pannello "Pick suggeriti" (2026-09-05). Prima l'unico segnale era la
@@ -351,6 +344,9 @@
       <button id="roster-profile-new">Nuovo</button>
       <button id="roster-profile-save">Salva</button>
       <button id="roster-profile-delete">Elimina</button>
+      <!-- Il team che l'app carica da sola all'avvio (2026-09-23): e' cosi'
+           che ora si sceglie con quale team lavorare. -->
+      <button type="button" id="roster-profile-default" class="toggle-chip">★ Team di default</button>
     </div>
 
     <div id="roster-role-tabs"></div>
@@ -569,6 +565,16 @@
             <span class="settings-note">Comp, tag e ruoli di ogni campione, senza passare da Excel</span>
           </span>
           <button type="button" id="edit-tags-open">Modifica tag</button>
+        </div>
+        <!-- Era il chip "Blue Side / Red Side" accanto al menu dei team. -->
+        <div class="settings-row" id="context-side-row">
+          <span class="settings-name">Lato del tuo team
+            <span class="settings-note" id="context-side-note"></span>
+          </span>
+          <div class="settings-side">
+            <button type="button" class="toggle-chip" id="context-side-blue">Blue Side</button>
+            <button type="button" class="toggle-chip" id="context-side-red">Red Side</button>
+          </div>
         </div>
         <label class="settings-row">
           <span class="settings-name">Pick e ban suggeriti</span>

@@ -96,10 +96,44 @@ def rename_profile(old_name: str, new_name: str) -> None:
     if new_name != old_name and new_name in profiles:
         raise ValueError(f'Esiste gia\' un profilo chiamato "{new_name}".')
     profiles[new_name] = profiles.pop(old_name)
+    if all_data.get("default") == old_name:
+        all_data["default"] = new_name
     _save_all(all_data)
 
 
 def delete_profile(name: str) -> None:
     all_data = _load_all()
     all_data["profiles"].pop(name, None)
+    if all_data.get("default") == name:
+        all_data.pop("default")
+    _save_all(all_data)
+
+
+# --- Team di default (2026-09-23) -------------------------------------------
+# Richiesta dell'utente: la maggior parte di chi usa l'app segue UN team (o ne
+# fa parte e drafta senza coach), quindi scegliere il team da un menu ad ogni
+# avvio era un passaggio inutile. Il team di default si carica da solo
+# all'avvio, e cambiare team vuol dire sceglierne un altro come default, da
+# "Modifica il tuo team". Sta nello stesso file dei profili e non nelle
+# preferenze del browser: cosi' segue il team quando lo si rinomina e sparisce
+# quando lo si elimina (vedi rename_profile/delete_profile qui sopra).
+
+
+def get_default() -> str | None:
+    """Il nome del team di default, o None se non c'e' (o non esiste piu')."""
+    all_data = _load_all()
+    nome = all_data.get("default")
+    return nome if isinstance(nome, str) and nome in all_data["profiles"] else None
+
+
+def set_default(name: str | None) -> None:
+    """Imposta il team di default; None (o stringa vuota) lo toglie."""
+    all_data = _load_all()
+    name = (name or "").strip()
+    if not name:
+        all_data.pop("default", None)
+    elif name not in all_data["profiles"]:
+        raise ValueError("Salva il team prima di sceglierlo come default.")
+    else:
+        all_data["default"] = name
     _save_all(all_data)

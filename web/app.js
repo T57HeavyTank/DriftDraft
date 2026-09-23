@@ -12,6 +12,7 @@ const backend = window.pywebview
       fetchOpggTeam: (url) => window.pywebview.api.fetch_opgg_team(url),
       fetchOpggRosterTeam: (teamName) => window.pywebview.api.fetch_opgg_roster_team(teamName),
       listRosterProfiles: () => window.pywebview.api.list_roster_profiles(),
+      setRosterDefault: (name) => window.pywebview.api.set_roster_default(name),
       getRosterProfile: (name) => window.pywebview.api.get_roster_profile(name),
       saveRosterProfile: (name, data) => window.pywebview.api.save_roster_profile(name, data),
       deleteRosterProfile: (name) => window.pywebview.api.delete_roster_profile(name),
@@ -93,6 +94,12 @@ const backend = window.pywebview
           body: JSON.stringify({ team_name: teamName }),
         }).then((r) => r.json()),
       listRosterProfiles: () => fetch("/api/roster-profiles").then((r) => r.json()),
+      setRosterDefault: (name) =>
+        fetch("/api/roster-default", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        }).then((r) => r.json()),
       getRosterProfile: (name) =>
         fetch(`/api/roster-profile?name=${encodeURIComponent(name)}`).then((r) => r.json()),
       saveRosterProfile: (name, data) =>
@@ -444,6 +451,12 @@ let contextTierThreshold = null;
 // va chiesto ne' indovinato. Si azzera ad ogni cambio di team - una scelta
 // fatta per una squadra non vuol dire niente per un'altra.
 let contextTeamSide = null;
+// Caricamento della pool op.gg dei titolari, che parte da solo quando il team
+// di default entra in scena (all'avvio o scelto nel roster): i nomi restano
+// spenti finche' dura, e un errore finisce nel loro tooltip invece che in un
+// alert - con la rete assente, un alert ad ogni avvio sarebbe una punizione.
+let contextOpggLoading = false;
+let contextOpggNote = "";
 
 // Ricerca counter: un campione di riferimento gia' in uno slot + un ruolo,
 // contro cui confrontare ogni campione in griglia. Stato globale unico (non
@@ -715,6 +728,7 @@ let trainingEvaluation = null;
 const TIER_LABELS = ["S", "A", "B", "C", "D"];
 let rosterProfiles = []; // nomi dei profili-team salvati
 let rosterCurrentProfileName = null; // profilo aperto ora nel modale (null = non ancora salvato)
+let rosterDefaultName = null; // il team di default (vedi roster.get_default), null = nessuno
 let rosterDraftName = ""; // nome mostrato/editabile nel campo di testo, salvato solo al click su Salva
 let rosterDraft = null; // { Top: [player,...], Jungle: [...], ... } - copia locale, scartata se si chiude senza salvare
 // Fotografia della bozza com'era all'ultimo salvataggio (o all'apertura di
@@ -993,8 +1007,13 @@ function startBlankRosterDraft() {
 }
 
 async function openRosterModal() {
-  rosterProfiles = (await backend.listRosterProfiles()).profiles;
-  if (rosterProfiles.length > 0) {
+  const elenco = await backend.listRosterProfiles();
+  rosterProfiles = elenco.profiles;
+  rosterDefaultName = elenco.default || null;
+  // Si apre sul PROPRIO team, cioe' il default, se c'e'.
+  if (rosterDefaultName && rosterProfiles.includes(rosterDefaultName)) {
+    await loadRosterProfile(rosterDefaultName);
+  } else if (rosterProfiles.length > 0) {
     await loadRosterProfile(rosterProfiles[0]);
   } else {
     startBlankRosterDraft();
@@ -1034,6 +1053,9 @@ async function saveRosterDraft() {
   rosterCurrentProfileName = newName;
   rosterDraftName = newName;
   rosterSavedSnapshot = rosterSnapshot();
+  // Una rinomina del team di default lo sposta sul nome nuovo lato server:
+  // si rilegge da li' invece di ripetere la stessa regola qui.
+  rosterDefaultName = (await backend.listRosterProfiles()).default || null;
   renderRosterProfileSelect();
   return true;
 }
@@ -1093,7 +1115,10 @@ async function closeRosterModal() {
   document.getElementById("roster-modal").classList.add("hidden");
   rosterDraft = null; // le modifiche non salvate vengono scartate
   rosterSavedSnapshot = null;
-  refreshContextTeamOptions();
+  // Il team di default puo' essere cambiato (o le sue tier list): lo si
+  // applica all'app ADESSO, a modale chiuso, cosi' la domanda sul lato non
+  // gli si apre sopra.
+  syncDefaultTeam();
 }
 
 function renderRosterModal() {
@@ -1115,6 +1140,19 @@ function renderRosterProfileSelect() {
   // 2026-09-06 fa un mestiere solo: mostra e RINOMINA il team aperto. Per
   // sceglierne un altro c'e' la freccia (vedi setupCombo).
   document.getElementById("roster-profile-combo").value = rosterDraftName;
+
+  // "★ Team di default": premuto se il team aperto E' quello di default.
+  // Spento finche' il team non e' salvato: il default punta a un team su
+  // disco, e uno che esiste solo in bozza non si potrebbe caricare all'avvio.
+  const btn = document.getElementById("roster-profile-default");
+  const eDefault = !!rosterCurrentProfileName && rosterCurrentProfileName === rosterDefaultName;
+  btn.classList.toggle("active", eDefault);
+  btn.disabled = !rosterCurrentProfileName;
+  btn.title = !rosterCurrentProfileName
+    ? "Salva il team per poterlo scegliere come default"
+    : eDefault
+      ? "È il team che DriftDraft carica all'avvio: clicca per toglierlo"
+      : "Carica questo team all'avvio e usalo da subito";
 }
 
 function renderRosterRoleTabs() {
@@ -1572,7 +1610,7 @@ function setupRosterModal() {
     () =>
       rosterProfiles.map((name) => ({
         key: name,
-        label: name,
+        label: name === rosterDefaultName ? `★ ${name}` : name,
         current: name === rosterCurrentProfileName,
       })),
     async (name) => {
@@ -1636,11 +1674,25 @@ function setupRosterModal() {
 
   document.getElementById("roster-profile-save").addEventListener("click", saveRosterDraft);
 
+  document.getElementById("roster-profile-default").addEventListener("click", async () => {
+    if (!rosterCurrentProfileName) return;
+    const nuovo = rosterCurrentProfileName === rosterDefaultName ? "" : rosterCurrentProfileName;
+    const result = await backend.setRosterDefault(nuovo);
+    if (result.error) {
+      alert(result.error);
+      return;
+    }
+    rosterDefaultName = result.default || null;
+    renderRosterProfileSelect();
+  });
+
   document.getElementById("roster-profile-delete").addEventListener("click", async () => {
     if (!rosterCurrentProfileName) return;
     if (!confirm(`Eliminare il profilo "${rosterCurrentProfileName}"?`)) return;
     const result = await backend.deleteRosterProfile(rosterCurrentProfileName);
     rosterProfiles = result.profiles;
+    // Eliminando il team di default, il default sparisce (vedi delete_profile).
+    rosterDefaultName = (await backend.listRosterProfiles()).default || null;
     if (rosterProfiles.length > 0) {
       await loadRosterProfile(rosterProfiles[0]);
     } else {
@@ -2272,91 +2324,95 @@ function renderCounterTierToggle() {
   }
 }
 
-// Rilegge l'elenco team salvati e ripopola il menu, preservando la
-// selezione corrente se il team esiste ancora (es. dopo aver creato/salvato
-// un ALTRO team nel modale roster - un rename/eliminazione del team che era
-// selezionato qui azzera invece la selezione, comportamento sicuro di
-// default piuttosto che inseguire il nuovo nome).
-async function refreshContextTeamOptions() {
-  const profiles = (await backend.listRosterProfiles()).profiles;
-  const sel = document.getElementById("context-team-select");
-  const current = sel.value;
-
-  sel.innerHTML = '<option value="">Nessun team selezionato</option>';
-  for (const name of profiles) {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    sel.appendChild(opt);
+// Il team con cui si lavora e' il TEAM DI DEFAULT (2026-09-23), scelto in
+// "Modifica il tuo team". Richiesta dell'utente: la maggior parte di chi usa
+// l'app segue un team solo, o ne fa parte e drafta senza coach, quindi il menu
+// per sceglierlo ad ogni avvio era un passaggio inutile - ma passare da un
+// team all'altro resta possibile, scegliendone un altro come default.
+//
+// syncDefaultTeam allinea l'app al default su disco: all'avvio, e ogni volta
+// che si chiude il roster (dove il default o le tier list possono essere
+// cambiati). Torna appena il profilo e' caricato: pool op.gg e domanda sul
+// lato partono senza essere attese, altrimenti all'avvio init() resterebbe
+// ferma finche' non si risponde "da che lato giochi".
+async function syncDefaultTeam() {
+  const nome = (await backend.listRosterProfiles()).default || "";
+  if (nome !== contextTeamName) {
+    await selectContextTeam(nome);
+    return;
   }
+  if (!nome) return;
+  // Stesso team: le sue tier list possono essere cambiate nel roster. La pool
+  // op.gg si riscarica solo se sono cambiati i Riot ID dei titolari.
+  const primi = riotIdsTitolari(contextTeamData);
+  contextTeamData = await backend.getRosterProfile(nome);
+  if (contextPlayerKey) {
+    const [ruolo, i] = contextPlayerKey.split("|");
+    if (!contextTeamData[ruolo] || !contextTeamData[ruolo][Number(i)]) {
+      contextPlayerKey = null;
+      contextTierThreshold = null;
+    }
+  }
+  renderContextPlayerFilters();
+  renderContextTierFilters();
+  renderContextSideChip();
+  renderGrid();
+  refreshSuggestions();
+  if (riotIdsTitolari(contextTeamData) !== primi) refreshContextTeamOpgg();
+}
 
-  if (profiles.includes(current)) {
-    sel.value = current;
-  } else {
-    contextTeamName = "";
-    contextTeamData = null;
-    contextPlayerKey = null;
-    contextTierThreshold = null;
-    contextTeamSide = null;
-    contextTeamOpggData = null;
-    document.getElementById("context-team-opgg-status").textContent = "";
-    renderContextPlayerFilters();
-    renderContextTierFilters();
-    renderGrid();
+function riotIdsTitolari(team) {
+  if (!team) return "";
+  return ROLE_ICONS.map(([ruolo]) => (team[ruolo] && team[ruolo][0] && team[ruolo][0].riot_id) || "").join("|");
+}
+
+async function selectContextTeam(nome) {
+  contextTeamName = nome;
+  contextPlayerKey = null;
+  contextTierThreshold = null;
+  contextTeamOpggData = null;
+  contextTeamSide = null;
+  contextOpggNote = "";
+  contextTeamData = nome ? await backend.getRosterProfile(nome) : null;
+  renderContextPlayerFilters();
+  renderContextTierFilters();
+  renderContextSideChip();
+  renderGrid();
+  refreshSuggestions();
+  if (nome) {
+    // Il lato si chiede SUBITO, e il caricamento op.gg parte in parallelo:
+    // le tier list, che sono l'unica cosa a cui il lato serve, non c'entrano
+    // niente con op.gg (quello alimenta le statistiche per giocatore sulla
+    // griglia). Nessuno dei due e' atteso da chi chiama, vedi syncDefaultTeam.
+    refreshContextTeamOpgg();
+    chiediLatoSeServe(nome);
   }
 }
 
 async function setupContextBar() {
-  await refreshContextTeamOptions();
-
-  document.getElementById("context-team-select").addEventListener("change", async (e) => {
-    contextTeamName = e.target.value;
-    contextPlayerKey = null;
-    contextTierThreshold = null;
-    contextTeamOpggData = null;
-    contextTeamSide = null;
-    document.getElementById("context-team-opgg-status").textContent = "";
-    contextTeamData = contextTeamName ? await backend.getRosterProfile(contextTeamName) : null;
-    renderContextPlayerFilters();
-    renderContextTierFilters();
-    renderContextSideChip();
-    renderGrid();
-    refreshSuggestions();
-    if (contextTeamName) {
-      // Il lato si chiede SUBITO, e il caricamento op.gg parte in parallelo.
-      // Prima la domanda aspettava la fine del caricamento, e in quei secondi
-      // il promemoria nella barra era gia' li': si poteva rispondere e poi
-      // vedersi arrivare il dialogo lo stesso. Le tier list, che sono l'unica
-      // cosa a cui il lato serve, non c'entrano niente con op.gg - quello
-      // alimenta le statistiche per giocatore sulla griglia, un'altra cosa.
-      // Chiedere prima toglie l'attesa e la doppia domanda insieme.
-      const caricamento = refreshContextTeamOpgg();
-      await chiediLatoSeServe(contextTeamName);
-      await caricamento;
-    }
-  });
-
-  document.getElementById("context-side-chip").addEventListener("click", async () => {
-    if (!contextTeamName) return;
-    const scelta = await askContextSide(contextTeamName);
-    contextTeamSide = scelta;
-    renderContextSideChip();
-    refreshSuggestions();
-  });
-
-  document
-    .getElementById("context-team-opgg-refresh")
-    .addEventListener("click", refreshContextTeamOpgg);
+  for (const lato of ["blue", "red"]) {
+    document.getElementById(`context-side-${lato}`).addEventListener("click", () => {
+      if (!contextTeamName) return;
+      // Ripremere il lato gia' scelto lo toglie: "non lo so ancora" e' una
+      // risposta legittima, la stessa di "Decido dopo" nella domanda.
+      contextTeamSide = contextTeamSide === lato ? null : lato;
+      renderContextSideChip();
+      refreshSuggestions();
+    });
+  }
+  await syncDefaultTeam();
 }
 
-// Scarica la pool op.gg (storico completo, un fetch per titolare - vedi
-// fetch_player_champions in opgg.py) dei 5 titolari del team di contesto.
-// NON alimenta teamPools/pool-chip (quella e' un'altra funzione, il
-// multisearch a mano sui pannelli Blue/Red Side, rimasta invariata) - i
-// dati restano in contextTeamOpggData finche' non si clicca il tag di un
-// giocatore specifico accanto al menu team (vedi contextPlayerOpggStats),
-// che ne mostra SOLO i suoi campioni/winrate sulla griglia. Richiamata sia
-// al cambio team sia dal pulsante di refresh manuale.
+// refreshContextTeamOpgg (piu' sotto) scarica la pool op.gg (storico
+// completo, un fetch per titolare - vedi fetch_player_champions in opgg.py)
+// dei 5 titolari del team di default. NON alimenta teamPools/pool-chip
+// (quella e' un'altra funzione, il multisearch a mano sui pannelli Blue/Red
+// Side, rimasta invariata) - i dati restano in contextTeamOpggData finche'
+// non si clicca il nome di un giocatore sotto la ricerca (vedi
+// contextPlayerOpggStats), che ne mostra SOLO i suoi campioni/winrate sulla
+// griglia. Parte da sola quando il team entra in scena (vedi
+// selectContextTeam): il bottone per rilanciarla a mano non c'e' piu'.
+
 // Il team ha almeno una tier list vera? Se non ne ha nessuna, chiedere il
 // lato non servirebbe a niente: il profilo non verrebbe usato comunque (la
 // stessa guardia sta lato server in _our_profile_arg, qui e' solo per non
@@ -2407,23 +2463,27 @@ function askContextSide(teamName) {
   });
 }
 
-// Il promemoria nella barra. Compare SOLO in modalita' libera con un team che
-// ha delle tier list: altrove il lato lo sa gia' l'app e mostrarlo darebbe
-// l'idea che sia una cosa da decidere.
+// La voce "Lato del tuo team" nelle Impostazioni (era il chip accanto al
+// menu dei team). Si usa SOLO in modalita' libera con un team che ha delle
+// tier list: altrove il lato lo sa gia' l'app, e la voce resta spenta con il
+// motivo scritto sotto. Il nome e' rimasto quello di prima perche' la
+// chiamano in parecchi punti (cambio modalita', pannello suggerimenti).
 function renderContextSideChip() {
-  const chip = document.getElementById("context-side-chip");
-  if (!chip) return;
-  const serve = !tournamentConnected && !trainingConnected && teamHasTierLists();
-  chip.classList.toggle("hidden", !serve);
-  if (!serve) return;
-  const etichette = { blue: "Blue Side", red: "Red Side" };
-  chip.textContent = contextTeamSide ? etichette[contextTeamSide] : "Da che lato?";
-  chip.className =
-    "context-side-chip " +
-    (contextTeamSide ? "side-" + contextTeamSide : "side-none");
-  chip.title = contextTeamSide
-    ? "Clicca per cambiare lato"
-    : "Scegli da che lato giochi, per avere i pick suggeriti dalle tue tier list";
+  const row = document.getElementById("context-side-row");
+  if (!row) return;
+  let motivo = "";
+  if (tournamentConnected || trainingConnected) motivo = "In torneo e in training il lato lo sa già l'app";
+  else if (!contextTeamName) motivo = "Scegli prima un team di default in Modifica il tuo team";
+  else if (!teamHasTierLists()) motivo = "Serve un team con le tier list";
+  const attiva = !motivo;
+  row.classList.toggle("settings-off", !attiva);
+  document.getElementById("context-side-note").textContent =
+    motivo || "In modalità normale: serve ai pick suggeriti dalle tue tier list";
+  for (const lato of ["blue", "red"]) {
+    const btn = document.getElementById(`context-side-${lato}`);
+    btn.disabled = !attiva;
+    btn.classList.toggle("active", attiva && contextTeamSide === lato);
+  }
 }
 
 // Chiede il lato dopo che il team e' stato caricato del tutto. Il guardiano
@@ -2450,28 +2510,27 @@ async function chiediLatoSeServe(teamAtteso) {
 
 async function refreshContextTeamOpgg() {
   if (!contextTeamName) return;
-  const btn = document.getElementById("context-team-opgg-refresh");
-  const status = document.getElementById("context-team-opgg-status");
+  const team = contextTeamName;
   // Il fetch reale (un lancio Playwright per titolare) impiega diversi
-  // secondi - senza un segnale visibile l'utente non capisce se il click e'
-  // stato registrato e tende a ripremere piu' volte (osservato dall'utente
-  // stesso, 2026-08-19). Il bottone e' gia' disabilitato durante il fetch
-  // (i re-click non fanno nulla), ma qui serve renderlo VISIBILE.
-  btn.disabled = true;
-  status.textContent = "Aggiornamento…";
+  // secondi: finche' dura i nomi restano spenti (vedi .context-player-chip.
+  // loading). Non c'e' piu' un bottone per rilanciarlo: parte da solo quando
+  // il team di default entra in scena.
+  contextOpggLoading = true;
+  contextOpggNote = "";
+  renderContextPlayerFilters();
 
-  const result = await backend.fetchOpggRosterTeam(contextTeamName);
-  btn.disabled = false;
-
+  const result = await backend.fetchOpggRosterTeam(team);
+  // Cambiato team mentre caricava: questo risultato e' di quello vecchio.
+  if (contextTeamName !== team) return;
+  contextOpggLoading = false;
   if (result.error) {
     contextTeamOpggData = null;
-    status.textContent = "";
-    alert(result.error);
+    contextOpggNote = `op.gg non caricato: ${result.error}`;
   } else {
     contextTeamOpggData = result;
-    status.textContent = "Aggiornata";
-    if (result.warning) alert(result.warning);
+    contextOpggNote = result.warning || "";
   }
+  renderContextPlayerFilters();
   renderGrid();
 }
 
@@ -2486,8 +2545,15 @@ function renderContextPlayerFilters() {
       const key = `${role}|${i}`;
 
       const chip = document.createElement("div");
-      chip.className = "context-player-chip" + (contextPlayerKey === key ? " active" : "");
-      chip.title = role;
+      chip.className =
+        "context-player-chip" +
+        (contextPlayerKey === key ? " active" : "") +
+        (contextOpggLoading ? " loading" : "");
+      chip.title = contextOpggLoading
+        ? `${role} - sto caricando la pool op.gg...`
+        : contextOpggNote
+          ? `${role} - ${contextOpggNote}`
+          : role;
 
       const img = document.createElement("img");
       img.src = `/assets/role_icons/${encodeURIComponent(iconFile)}`;

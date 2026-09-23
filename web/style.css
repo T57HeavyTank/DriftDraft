@@ -1079,49 +1079,23 @@ body {
   min-width: 0;
 }
 
-#context-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-#context-team-select {
-  background: var(--nm-surface);
-  border: none;
-  border-radius: 14px;
-  box-shadow: var(--nm-in);
-  padding: 8px 12px;
-  color: var(--text);
-  font-size: 13px;
-  flex: none;
-  width: 200px;
-  transition: box-shadow 0.16s ease;
-}
-
-#context-team-opgg-refresh {
-  /* Stessa altezza del menu a tendina accanto (35px, richiesta esplicita
-     dell'utente 2026-08-19, quando accanto c'era anche l'ingranaggio del
-     roster, ora nella barra a sinistra): .icon-btn di default e' piu'
-     piccolo e ha un margin-bottom pensato per contesti impilati, non per
-     questa riga. flex-shrink:0 perche' la riga non lo comprima. */
-  margin-bottom: 0;
-  flex-shrink: 0;
-  width: 35px;
-  height: 35px;
-  font-size: 18px;
-}
-
-#context-team-opgg-status {
-  font-size: 11px;
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
-
+/* Sotto la ricerca dal 2026-09-23. Senza team di default e' vuota e non
+   deve lasciare un buco nel respiro fra toolbar e griglia. */
 #context-player-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  flex: 1;
+}
+
+#context-player-filters:empty {
+  display: none;
+}
+
+/* Mentre la pool op.gg dei titolari si carica (all'avvio, da sola): i nomi
+   restano un po' spenti e il tooltip lo dice. Prima c'era la scritta
+   "Aggiornamento..." accanto al bottone di ricarica, che non c'e' piu'. */
+.context-player-chip.loading {
+  opacity: 0.5;
 }
 
 .context-player-chip {
@@ -3820,36 +3794,26 @@ label.settings-row {
   text-decoration: underline;
 }
 
-/* Il promemoria nella barra: dice da che lato sei e ci si clicca per
-   cambiarlo. Senza, l'unico modo per correggere una scelta sbagliata
-   sarebbe riselezionare il team - e su un <select> riscegliere la voce
-   gia' attiva non emette nessun evento. */
-.context-side-chip {
-  background: var(--nm-surface);
-  border: none;
-  border-radius: 10px;
-  box-shadow: var(--nm-out-sm);
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
+/* Lato del proprio team, nelle Impostazioni dal 2026-09-23 (era un chip
+   accanto al menu dei team): due chip, quello scelto premuto e colorato col
+   colore del suo lato. */
+.settings-side {
+  display: flex;
+  gap: 6px;
+  flex: none;
 }
 
-.context-side-chip.hidden {
-  display: none;
-}
-
-.context-side-chip.side-blue {
+#context-side-blue.active {
   color: var(--suggest-blue);
 }
 
-.context-side-chip.side-red {
+#context-side-red.active {
   color: var(--suggest-red);
 }
 
-.context-side-chip.side-none {
-  color: var(--text-dim);
+.settings-side .toggle-chip:disabled {
+  cursor: default;
+  box-shadow: none;
 }
 
 .roster-unsaved {

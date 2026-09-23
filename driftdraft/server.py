@@ -39,10 +39,12 @@ from driftdraft.roster import (
     ROLES,
     TIERS,
     delete_profile,
+    get_default,
     list_profiles,
     load_profile,
     rename_profile,
     save_profile,
+    set_default,
 )
 from driftdraft.saved_drafts import add_saved_draft, delete_saved_draft, list_saved_drafts
 from driftdraft.tierlist_detect import detect_tierlist
@@ -1104,7 +1106,21 @@ def _clean_profile(incoming: dict) -> dict:
 @app.get("/api/roster-profiles")
 def api_roster_profiles():
     response.content_type = "application/json"
-    return json.dumps({"profiles": list_profiles()}, ensure_ascii=False)
+    # Il team di default viaggia con l'elenco: la UI lo carica all'avvio e lo
+    # segna nel menu dei team (vedi roster.get_default).
+    return json.dumps({"profiles": list_profiles(), "default": get_default()}, ensure_ascii=False)
+
+
+@app.post("/api/roster-default")
+def api_roster_default():
+    """Sceglie (o toglie, con name vuoto) il team di default."""
+    body = request.json or {}
+    response.content_type = "application/json"
+    try:
+        set_default(str(body.get("name") or ""))
+    except ValueError as e:
+        return json.dumps({"error": str(e)})
+    return json.dumps({"default": get_default()}, ensure_ascii=False)
 
 
 @app.get("/api/roster-profile")
