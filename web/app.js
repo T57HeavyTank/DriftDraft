@@ -1911,9 +1911,10 @@ async function init() {
   setupIconSizeSlider();
   setupSidebarSizeSlider();
   setupThemeToggle();
+  setupSettingsModal();
+  setupCompBordersToggle();
   setupCounterDiagramToggle();
   setupLaneCounterToggle();
-  setupCompBordersToggle();
   setupSaveDraftPopovers();
   setupSavedDraftsViewer();
 
@@ -1964,9 +1965,8 @@ function setupSidebarSizeSlider() {
 // larghezza pannelli, bordi comp): la finestra dell'app gira con
 // private_mode=False apposta perche' sopravvivano ai riavvii - vedi main.py.
 //
-// L'icona mostra la DESTINAZIONE, non lo stato corrente (col tema scuro
-// attivo si vede il sole, cioe' "portami alla luce"): e' la convenzione piu'
-// diffusa e la piu' leggibile su un bottone che sta da solo, senza etichetta.
+// Dal 2026-09-23 e' un interruttore "Tema chiaro" nelle Impostazioni, non piu'
+// il bottone sole/luna nell'intestazione del Blue Side.
 function applyTheme(light) {
   // La classe va su <html>, NON su <body>: --text/--text-dim e le ombre
   // --nm-out/--nm-in sono dichiarate su :root come alias di altre
@@ -1977,35 +1977,50 @@ function applyTheme(light) {
   // chiaro, illeggibile - bug visto dal vivo). Sullo stesso elemento
   // di :root, invece, la cascata le ricalcola tutte.
   document.documentElement.classList.toggle("theme-light", light);
-  const btn = document.getElementById("theme-toggle");
-  btn.textContent = light ? "\u{1F319}" : "\u{2600}\u{FE0F}";
-  btn.title = light ? "Passa al tema scuro" : "Passa al tema chiaro";
+  document.getElementById("theme-toggle").checked = light;
 }
 
 function setupThemeToggle() {
-  let light = localStorage.getItem("themeLight") === "true";
-  applyTheme(light);
-  document.getElementById("theme-toggle").addEventListener("click", () => {
-    light = !light;
-    localStorage.setItem("themeLight", light);
-    applyTheme(light);
+  applyTheme(localStorage.getItem("themeLight") === "true");
+  const toggle = document.getElementById("theme-toggle");
+  toggle.addEventListener("change", () => {
+    localStorage.setItem("themeLight", toggle.checked);
+    applyTheme(toggle.checked);
+  });
+}
+
+// Impostazioni (2026-09-23): un modale come roster e training, con dentro
+// le preferenze che si toccano una volta sola. I controlli si impostano da
+// soli al loro setup, qui c'e' solo da aprire e chiudere.
+function setupSettingsModal() {
+  const modal = document.getElementById("settings-modal");
+  const close = () => modal.classList.add("hidden");
+  document.getElementById("settings-open").addEventListener("click", () => {
+    modal.classList.remove("hidden");
+    refreshSuggestionsDataInfo();
+  });
+  document.getElementById("settings-close").addEventListener("click", close);
+  // Un clic sul velo attorno chiude, come ci si aspetta da un pannello di
+  // preferenze: qui non c'e' niente da salvare, ogni voce vale subito.
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) close();
   });
 }
 
 // Mostra/nascondi il diagramma "Counter naturali" - solo un aiuto per
-// neofiti secondo l'utente, quindi opzionale. Nasconde solo il corpo
-// (#counter-diagram-body), MAI il titolo/interruttore stesso - altrimenti
-// non ci sarebbe piu' modo di riaccenderlo.
+// neofiti secondo l'utente, quindi opzionale. Prima si nascondeva solo il
+// corpo del pannello, perche' l'interruttore stava nel suo titolo e doveva
+// restare raggiungibile; dal 2026-09-23 l'interruttore e' nelle Impostazioni
+// e sparisce il pannello intero. Sparisce anche col lavoro per comp spento:
+// e' il diagramma di chi batte chi FRA LE COMP (vedi applyCompBordersPreference).
 function setupCounterDiagramToggle() {
   const toggle = document.getElementById("counter-diagram-toggle");
-  const body = document.getElementById("counter-diagram-body");
   const saved = localStorage.getItem("showCounterDiagram");
-  const initial = saved === null ? true : saved === "true";
-  toggle.checked = initial;
-  body.classList.toggle("hidden", !initial);
+  toggle.checked = saved === null ? true : saved === "true";
+  applyCompBordersPreference();
   toggle.addEventListener("change", () => {
-    body.classList.toggle("hidden", !toggle.checked);
     localStorage.setItem("showCounterDiagram", toggle.checked);
+    applyCompBordersPreference();
   });
 }
 
@@ -2021,11 +2036,27 @@ function setupCounterDiagramToggle() {
 // - non al momento della ricerca, altrimenti interromperebbe il coach con
 // un popup per un errore su una fonte che magari non stava nemmeno
 // guardando in quel momento.
-// Applica subito lo stato corrente di compBordersEnabled alla classe su
-// <body> - chiamata sia da setupCompBordersToggle() (al change) sia da
-// init() (per partire gia' nello stato giusto, senza aspettare un click).
+// Applica subito lo stato corrente di compBordersEnabled - chiamata sia da
+// setupCompBordersToggle() (al change) sia da init() (per partire gia' nello
+// stato giusto, senza aspettare un click).
+//
+// Dal 2026-09-23 l'interruttore si chiama "Lavoro per comp" (Impostazioni) e
+// spegne tutto cio' che riguarda le comp, non solo i bordi: "se un coach non
+// le usa, e' inutile appesantire la gui con roba inutile (a lui)". Quindi via
+// anche i due pannelli "Comp rilevate" e i "Counter naturali". Il ragionamento
+// per comp nei pick suggeriti del suo lato si spegneva gia' (vedi _comp_flags
+// lato server): la variabile resta compBordersEnabled perche' e' anche la
+// chiave salvata in localStorage da chi l'ha gia' usata.
 function applyCompBordersPreference() {
   document.body.classList.toggle("comp-borders-off", !compBordersEnabled);
+  document.querySelectorAll(".comp-panel").forEach((el) => el.classList.toggle("hidden", !compBordersEnabled));
+  const diagramma = document.getElementById("counter-diagram-toggle");
+  document
+    .getElementById("counter-diagram-panel")
+    .classList.toggle("hidden", !compBordersEnabled || !diagramma.checked);
+  // Senza comp i counter naturali non esistono: la voce resta a vista ma spenta.
+  diagramma.disabled = !compBordersEnabled;
+  document.getElementById("counter-diagram-row").classList.toggle("settings-off", !compBordersEnabled);
 }
 
 function setupCompBordersToggle() {
@@ -2036,6 +2067,15 @@ function setupCompBordersToggle() {
     compBordersEnabled = toggle.checked;
     localStorage.setItem("compBordersEnabled", compBordersEnabled);
     applyCompBordersPreference();
+    // I filtri per comp e per tag si accendono cliccando nei pannelli "Comp
+    // rilevate": spegnendo le comp quei pannelli spariscono, e un filtro
+    // rimasto acceso terrebbe la griglia ristretta senza piu' nessun modo
+    // visibile di toglierlo.
+    if (!compBordersEnabled && (activeFilters.size || activeTagFilters.size)) {
+      activeFilters.clear();
+      activeTagFilters.clear();
+      renderGrid();
+    }
     // Da quando questa preferenza spegne anche il ragionamento per comp nei
     // pick suggeriti (vedi _comp_flags lato server), il pannello va rifatto
     // subito: altrimenti si preme e non cambia niente fino al pick dopo.
@@ -5292,6 +5332,15 @@ function renderSuggestionsPanel() {
   fillSuggestionsRow("red", redSuggestions, teams.right.filter((n) => n).length, redThin);
   fillBanRow("blue", blueBanSuggestions);
   fillBanRow("red", redBanSuggestions);
+
+  // Interruttore e "Aggiorna dati" sono nelle Impostazioni (2026-09-23): il
+  // pannello non ha piu' motivo di restare a vista vuoto. Via la testa se non
+  // c'e' il filtro, via tutto se non c'e' nemmeno una riga.
+  const panel = document.getElementById("suggestions-panel");
+  const head = document.getElementById("suggestions-panel-head");
+  head.classList.toggle("hidden", chip.classList.contains("hidden"));
+  const righe = panel.querySelectorAll(".suggestions-row:not(.hidden)").length;
+  panel.classList.toggle("hidden", !righe && head.classList.contains("hidden"));
 }
 
 function refreshSuggestions() {

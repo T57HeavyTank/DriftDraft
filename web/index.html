@@ -25,17 +25,30 @@
      dello sfondo (rumore procedurale -> foto Hubble CC BY 4.0 -> immagine
      propria) nella memoria di progetto. -->
 <div id="app">
+  <!-- Barra delle modalita' (2026-09-23). Critica ricevuta dall'utente dopo
+       averla fatta provare: tanti strumenti aiutano un coach esperto, ma uno
+       inesperto si perde fra le opzioni. Qui a sinistra, solo icone, le cose
+       che si aprono (modalita', draft salvate, team, impostazioni): il nome
+       compare passandoci sopra. Resta spazio per aggiungerne altre senza
+       appesantire la barra in alto. I bottoni tengono gli id di prima, quindi
+       tutta la logica (stato acceso, torneo e training che si escludono a
+       vicenda) e' la stessa. -->
+  <nav id="rail" aria-label="Modalità e impostazioni">
+    <div class="rail-group">
+      <button type="button" id="tournament-mode-open" class="rail-btn" aria-label="Modalità torneo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3.5h8v5.5a4 4 0 0 1-8 0z"/><path d="M8 5.5H5.2a2.8 2.8 0 0 0 3.3 4.4"/><path d="M16 5.5h2.8a2.8 2.8 0 0 1-3.3 4.4"/><path d="M12 13v4"/><path d="M8.5 20.5h7"/><path d="M9.5 17h5v3.5h-5z"/></svg><span class="rail-label">Modalità torneo</span></button>
+      <button type="button" id="training-mode-open" class="rail-btn" aria-label="Modalità training"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" class="rail-fill"/></svg><span class="rail-label">Modalità training</span></button>
+      <button type="button" id="saved-drafts-open" class="rail-btn" aria-label="Draft salvate"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="4.5" width="13" height="16.5" rx="2.2"/><rect x="9" y="2.8" width="6" height="3.4" rx="1.1"/><path d="M8.8 10.5h6.4M8.8 14h6.4M8.8 17.5h4"/></svg><span class="rail-label">Draft salvate</span></button>
+    </div>
+    <div class="rail-group">
+      <button type="button" id="roster-open" class="rail-btn" aria-label="Modifica il tuo team"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.2 20a5.8 5.8 0 0 1 11.6 0"/><circle cx="16.8" cy="9.6" r="2.5"/><path d="M15.3 14.9a4.6 4.6 0 0 1 5.9 4.5"/></svg><span class="rail-label">Modifica il tuo team</span></button>
+      <button type="button" id="settings-open" class="rail-btn" aria-label="Impostazioni"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5.6"/><circle cx="12" cy="12" r="2.1"/><path class="rail-teeth" d="M12 2.2v3M12 18.8v3M2.2 12h3M18.8 12h3M5.1 5.1l2.1 2.1M16.8 16.8l2.1 2.1M5.1 18.9l2.1-2.1M16.8 7.2l2.1-2.1"/></svg><span class="rail-label">Impostazioni</span></button>
+    </div>
+  </nav>
+
   <div id="sidebar">
     <div class="panel">
       <div class="panel-title-row">
         <h2>Blue Side</h2>
-        <!-- Interruttore tema chiaro/scuro. Sta QUI, in fondo alla riga del
-             titolo di Blue Side, per fare da specchio allo slider della
-             larghezza pannelli che occupa la stessa posizione su Red Side
-             (richiesta esplicita dell'utente 2026-09-05). E' un .icon-btn
-             come gli altri della UI; l'icona la scrive app.js e cambia col
-             tema attivo (vedi setupThemeToggle). -->
-        <button type="button" id="theme-toggle" class="icon-btn" title="Passa al tema chiaro"></button>
       </div>
       <div class="panel-body">
         <div class="pool-import">
@@ -57,20 +70,16 @@
         </div>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel comp-panel">
       <h2>Comp rilevate</h2>
       <div class="panel-body">
         <div id="comp-status"></div>
       </div>
     </div>
-    <div class="panel">
-      <div class="panel-title-row">
-        <h2>Counter naturali</h2>
-        <label class="toggle-switch" title="Mostra/nascondi (solo un aiuto per neofiti)">
-          <input type="checkbox" id="counter-diagram-toggle" checked>
-          <span class="toggle-track"><span class="toggle-thumb"></span></span>
-        </label>
-      </div>
+    <!-- Si accende e spegne dalle Impostazioni, e sparisce da solo anche col
+         lavoro per comp spento: e' il diagramma di chi batte chi fra le comp. -->
+    <div class="panel" id="counter-diagram-panel">
+      <h2>Counter naturali</h2>
       <div class="panel-body" id="counter-diagram-body">
         <div id="counter-diagram"></div>
       </div>
@@ -120,7 +129,6 @@
 
   <div id="main">
     <div id="context-bar">
-      <button id="roster-open" class="icon-btn" title="Modifica il tuo team">⚙</button>
       <select id="context-team-select">
         <option value="">Nessun team selezionato</option>
       </select>
@@ -132,10 +140,6 @@
            riselezionare il team. -->
       <button type="button" id="context-side-chip" class="context-side-chip hidden"></button>
       <div id="context-player-filters"></div>
-      <input type="range" id="icon-size-slider" min="1" max="2" step="0.05" value="2" title="Dimensione icone griglia">
-      <button id="saved-drafts-open" title="Vedi le draft salvate">📋 Draft salvate</button>
-      <button id="training-mode-open" title="Allenati contro un bot che sceglie in base a sinergia/counter osservati in draft pro recenti">🎯 Modalità training</button>
-      <button id="tournament-mode-open" title="Connetti DriftDraft a una draft live su drafter.lol">🏆 Modalità torneo</button>
     </div>
 
     <div id="context-tier-filters" class="hidden"></div>
@@ -173,7 +177,6 @@
              premuto dentro il materiale, come ogni altro filtro attivo di
              questa toolbar. -->
         <button type="button" id="lane-counter-toggle" class="toggle-chip" title="Usa i counter di corsia (differenza oro a 15 minuti, da u.gg) invece del winrate generale (lolalytics)">Counter corsia</button>
-        <div id="counter-tier-toggle" title="Fascia elo per la ricerca counter"></div>
       </div>
       <button id="reset-filters" title="Annulla tutti i filtri attivi (ricerca, comp, tag, ruolo, pool, giocatore, counter)">✕ Annulla tag</button>
     </div>
@@ -187,20 +190,14 @@
          griglia e sopra il bottone di conferma della modalita' torneo,
          posizione richiesta esplicitamente. -->
     <div id="suggestions-panel">
+      <!-- Interruttore, stato dei dati e "Aggiorna dati" stanno nelle
+           Impostazioni dal 2026-09-23: qui resta solo il filtro, che si usa
+           durante la draft. -->
       <div id="suggestions-panel-head">
-        <label id="suggestions-toggle-label" class="toggle-switch-labeled" title="Evidenzia i campioni con più sinergia/counter nei dati dei match pro recenti, in base ai pick già fatti (in qualunque modalità) - solo un suggerimento, la scelta resta tua">
-          <span class="toggle-switch">
-            <input type="checkbox" id="suggestions-toggle">
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-          </span>
-          <span>Pick suggeriti</span>
-        </label>
         <!-- Compare solo quando la pool op.gg di almeno un lato e'
              stata caricata (vedi renderSuggestionsPanel): acceso, ogni riga
              mostra solo campioni che quel lato gioca davvero. -->
         <button type="button" id="pool-filter" class="toggle-chip hidden" title="Restringi i suggerimenti di ogni lato ai soli campioni presenti nella pool op.gg caricata per quel lato">Solo pool op.gg</button>
-        <span id="suggestions-data-info"></span>
-        <button type="button" id="suggestions-sync" title="Riscarica le draft pro recenti da Leaguepedia e i dati soloQ (Emerald+, 30 giorni) da lolalytics: sono i dati su cui si basano sinergia, counter, ban e corsia suggerita">Aggiorna dati</button>
       </div>
       <!-- Una riga per LATO (2026-09-06). Erano "Per noi" e "Per loro", ma
            fuori da torneo/training il tool il lato nostro lo INDOVINAVA
@@ -281,7 +278,6 @@
     <div class="panel">
       <div class="panel-title-row">
         <h2>Red Side</h2>
-        <input type="range" id="sidebar-size-slider" min="1" max="2" step="0.05" value="1.2" title="Larghezza pannelli laterali">
       </div>
       <div class="panel-body">
         <div class="pool-import">
@@ -303,20 +299,18 @@
         </div>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel comp-panel">
       <h2>Comp rilevate</h2>
       <div class="panel-body">
         <div id="comp-status-2"></div>
       </div>
     </div>
+    <!-- Era "Bordi comp": l'interruttore e' diventato "Lavoro per comp" nelle
+         Impostazioni, qui resta l'editor dei tag. -->
     <div class="panel">
       <div class="panel-title-row">
-        <h2>Bordi comp</h2>
+        <h2>Tag campioni</h2>
         <div class="panel-title-row-controls">
-          <label class="toggle-switch" title="Mostra/nascondi il bordo colorato per comp sulle icone campione, in tutte le modalità">
-            <input type="checkbox" id="comp-borders-toggle" checked>
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-          </label>
           <button id="edit-tags-open" title="Modifica comp/tag/ruoli di un campione senza dover usare Excel">🏷️ Modifica tag</button>
         </div>
       </div>
@@ -519,6 +513,83 @@
       <button id="saved-drafts-close" class="icon-btn">✕</button>
     </div>
     <div id="saved-drafts-list"></div>
+  </div>
+</div>
+
+<!-- Impostazioni (2026-09-23): le cose che si regolano una volta e poi non si
+     vogliono piu' vedere, tolte dalla schermata di lavoro. Un modale come
+     roster e training, cosi' ci si possono aggiungere altre voci col tempo.
+     Gli id dei controlli sono quelli di prima: app.js li trova qui come li
+     trovava nelle vecchie posizioni. -->
+<div id="settings-modal" class="modal-overlay hidden">
+  <div class="modal-content settings-modal-content">
+    <div class="modal-header">
+      <h2>Impostazioni</h2>
+      <button id="settings-close" class="icon-btn">✕</button>
+    </div>
+    <div class="settings-body">
+      <section class="settings-section">
+        <h3>Aspetto</h3>
+        <label class="settings-row">
+          <span class="settings-name">Tema chiaro</span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="theme-toggle">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </span>
+        </label>
+        <div class="settings-row">
+          <span class="settings-name">Dimensione icone</span>
+          <input type="range" id="icon-size-slider" min="1" max="2" step="0.05" value="2">
+        </div>
+        <div class="settings-row">
+          <span class="settings-name">Larghezza pannelli laterali</span>
+          <input type="range" id="sidebar-size-slider" min="1" max="2" step="0.05" value="1.2">
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h3>Draft</h3>
+        <label class="settings-row">
+          <span class="settings-name">Lavoro per comp
+            <span class="settings-note">Comp rilevate, counter naturali, bordi colorati e comp nei suggerimenti</span>
+          </span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="comp-borders-toggle" checked>
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </span>
+        </label>
+        <label class="settings-row" id="counter-diagram-row">
+          <span class="settings-name">Counter naturali
+            <span class="settings-note">Il diagramma di chi batte chi fra le comp</span>
+          </span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="counter-diagram-toggle" checked>
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </span>
+        </label>
+        <label class="settings-row">
+          <span class="settings-name">Pick e ban suggeriti</span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="suggestions-toggle">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </span>
+        </label>
+        <div class="settings-row">
+          <span class="settings-name">Fascia elo della ricerca counter</span>
+          <div id="counter-tier-toggle"></div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h3>Dati</h3>
+        <div class="settings-row">
+          <span class="settings-name">Draft pro e dati soloQ
+            <span class="settings-note" id="suggestions-data-info"></span>
+          </span>
+          <button type="button" id="suggestions-sync" title="Riscarica le draft pro recenti da Leaguepedia e i dati soloQ (Emerald+, 30 giorni) da lolalytics">Aggiorna dati</button>
+        </div>
+      </section>
+    </div>
   </div>
 </div>
 

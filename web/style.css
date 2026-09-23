@@ -170,7 +170,9 @@ body {
 
 #app {
   display: grid;
-  grid-template-columns: calc(var(--sidebar-scale, 1.2) * 260px) 1fr calc(var(--sidebar-scale, 1.2) * 260px);
+  /* Prima colonna: la barra delle modalita' (#rail, 2026-09-23). Larghezza
+     fissa, non scala con --sidebar-scale: sono cinque icone, non contenuto. */
+  grid-template-columns: 58px calc(var(--sidebar-scale, 1.2) * 260px) 1fr calc(var(--sidebar-scale, 1.2) * 260px);
   /* Le ombre esterne dei pannelli hanno bisogno di spazio ai bordi dello
      schermo, altrimenti vengono tagliate dal viewport e il rilievo si perde
      proprio dove si nota di piu'. Solo +2px rispetto ai 12px di prima, non
@@ -184,7 +186,138 @@ body {
   padding: 14px;
 }
 
+/* ---------- Barra delle modalita' (2026-09-23) ----------
+   Colonna di sole icone a sinistra: modalita' in alto, team e impostazioni in
+   basso. Nata da una critica arrivata all'utente: le opzioni erano tutte a
+   vista e un coach inesperto si perdeva. E' un pannello come gli altri (tinta
+   --nm-panel passata ai discendenti), e i bottoni sono estrusi come ogni cosa
+   su cui si clicca. Niente overflow nascosto qui: l'etichetta del bottone
+   esce a destra, sopra la colonna del Blue Side. */
+#rail {
+  --nm-surface: var(--nm-panel);
+  /* Alta quanto la FINESTRA e ferma mentre si scorre: la riga di #app si
+     allunga fino all'altezza della griglia campioni (4489px misurati con le
+     icone al massimo) e la pagina scorre tutta. Come semplice cella della
+     griglia la barra si allungava con lei, e i due bottoni in basso finivano
+     sotto 4000px di pagina. position:sticky provato per primo e NON regge:
+     dentro una griglia che trabocca dal suo contenitore scorreva via lo
+     stesso (misurato: -2000px dopo uno scroll di 2000). Fissa alla finestra,
+     con la prima colonna di #app lasciata vuota apposta a farle posto - per
+     questo le altre tre colonne sono assegnate a mano (vedi #sidebar, #main,
+     #sidebar-right). 14px = il padding di #app. */
+  position: fixed;
+  top: 14px;
+  bottom: 14px;
+  left: 14px;
+  width: 58px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  background: var(--nm-panel);
+  border-radius: 20px;
+  box-shadow: var(--nm-out);
+}
+
+.rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rail-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--nm-surface);
+  border: none;
+  border-radius: 13px;
+  box-shadow: var(--nm-out-sm);
+  color: var(--sky-mid);
+  cursor: pointer;
+  transition: box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.rail-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Il puntino al centro del bersaglio e i denti dell'ingranaggio: pieni e
+   spessi, altrimenti a 22px si perdono. */
+.rail-btn svg .rail-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.rail-btn svg .rail-teeth {
+  stroke-width: 2.6;
+  stroke-linecap: butt;
+}
+
+.rail-btn:hover {
+  box-shadow: var(--nm-out);
+  color: var(--sky-light);
+}
+
+.rail-btn:active {
+  box-shadow: var(--nm-in-sm);
+}
+
+/* Il nome della voce, a destra dell'icona: compare solo passandoci sopra
+   (richiesta dell'utente). Un'etichetta vera e non il title del sistema,
+   che arriva dopo un secondo e con lo stile di Windows. pointer-events:none
+   perche' non rubi il mouse ai pannelli sotto. */
+.rail-label {
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 50%;
+  transform: translate(-4px, -50%);
+  padding: 6px 11px;
+  border-radius: 10px;
+  background: var(--nm-panel);
+  box-shadow: var(--nm-out-sm), 0 6px 16px var(--nm-drop);
+  color: var(--sky-light);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.rail-btn:hover .rail-label,
+.rail-btn:focus-visible .rail-label {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
 /* ---------- Sidebar sinistra/destra: squadra + rilevamento comp ---------- */
+
+/* Colonne assegnate a mano: la prima e' il posto riservato a #rail, che e'
+   fissa alla finestra e quindi non occupa una cella da sola - senza queste
+   tre righe la griglia ci infilerebbe il Blue Side. */
+#sidebar {
+  grid-column: 2;
+}
+
+#main {
+  grid-column: 3;
+}
+
+#sidebar-right {
+  grid-column: 4;
+}
 
 #sidebar,
 #sidebar-right {
@@ -348,7 +481,10 @@ body {
   box-shadow: var(--nm-out-xs), 0 0 8px var(--nm-thumb-glow);
 }
 
-#counter-diagram-body.hidden {
+/* Spenti dalle Impostazioni: i due "Comp rilevate" col lavoro per comp, i
+   "Counter naturali" col loro interruttore (o col lavoro per comp). */
+.panel.comp-panel.hidden,
+#counter-diagram-panel.hidden {
   display: none;
 }
 
@@ -934,22 +1070,6 @@ body {
   gap: 12px;
 }
 
-#context-bar #roster-open {
-  margin-bottom: 0;
-  /* Stessa altezza del menu a tendina accanto (misurata: 35px) - resta
-     quadrato (width = height), non un rettangolo, richiesta esplicita
-     dell'utente. Scoped solo qui: .icon-btn e' condivisa anche dai
-     bottoni ✕ dei modali, che non devono affiancare nessun <select>. */
-  width: 35px;
-  height: 35px;
-  font-size: 18px;
-  /* Senza questo, la riga flessibile di #context-bar lo comprime (35px
-     misurati diventavano 29px reali) quando lo spazio scarseggia - il
-     menu a tendina accanto non ne soffre solo perche' ha gia' flex:none
-     per conto suo. */
-  flex-shrink: 0;
-}
-
 #context-team-select {
   background: var(--nm-surface);
   border: none;
@@ -964,11 +1084,11 @@ body {
 }
 
 #context-team-opgg-refresh {
-  /* Stessa altezza del bottone ⚙ "Modifica il tuo team" accanto (richiesta
-     esplicita dell'utente, 2026-08-19), stesso trattamento gia' scelto per
-     #roster-open sopra e stessa ragione: .icon-btn di default e' piu'
+  /* Stessa altezza del menu a tendina accanto (35px, richiesta esplicita
+     dell'utente 2026-08-19, quando accanto c'era anche l'ingranaggio del
+     roster, ora nella barra a sinistra): .icon-btn di default e' piu'
      piccolo e ha un margin-bottom pensato per contesti impilati, non per
-     questa riga. */
+     questa riga. flex-shrink:0 perche' la riga non lo comprima. */
   margin-bottom: 0;
   flex-shrink: 0;
   width: 35px;
@@ -1122,8 +1242,7 @@ body {
 
 /* Separatore verticale: una linea netta sarebbe un corpo estraneo su una
    superficie continua, quindi e' una sfumatura che svanisce alle due
-   estremita' - come un'incisione nel materiale invece di un bordo. Stesso
-   trattamento su #counter-tier-toggle piu' sotto. */
+   estremita' - come un'incisione nel materiale invece di un bordo. */
 #counter-mode-controls {
   display: flex;
   align-items: center;
@@ -1140,25 +1259,6 @@ body {
   background-size: 1px 100%;
   background-repeat: no-repeat;
   background-position: left center;
-}
-
-/* Regola condivisa da OGNI <label class="toggle-switch-labeled"> (switch +
-   testo) - prima esisteva solo qui, con id specifico #lane-counter-toggle-
-   label ("Counter corsia"), MAI applicata a #suggestions-toggle-label
-   ("Pick suggeriti", stessa identica struttura HTML) che quindi restava un
-   <label> inline senza align-items, testo "sfalsato" verticalmente rispetto
-   allo switch - segnalato dall'utente con screenshot 2026-09-04. Spostata
-   sulla classe condivisa invece di duplicare la regola su un secondo id: le
-   due label sono lo stesso componente, un'unica sorgente di verita' per
-   entrambe (e per ogni altro toggle futuro che riusi questa classe). */
-.toggle-switch-labeled {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-dim);
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
 }
 
 /* ---------- Chip acceso/spento ----------
@@ -1197,21 +1297,11 @@ body {
   display: none;
 }
 
+/* Nelle Impostazioni dal 2026-09-23: niente piu' separatore, era la riga
+   della toolbar a volerlo. */
 #counter-tier-toggle {
   display: flex;
-  gap: 4px;
-  margin-left: 4px;
-  padding-left: 8px;
-  background-image: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0),
-    var(--nm-dark) 25%,
-    var(--nm-dark) 75%,
-    rgba(0, 0, 0, 0)
-  );
-  background-size: 1px 100%;
-  background-repeat: no-repeat;
-  background-position: left center;
+  gap: 6px;
 }
 
 #reset-filters {
@@ -1238,37 +1328,10 @@ body {
   box-shadow: var(--nm-in-sm);
 }
 
-#saved-drafts-open,
-#training-mode-open,
-#tournament-mode-open {
-  flex: none;
-  height: 34px;
-  background: var(--nm-surface);
-  border: none;
-  border-radius: 12px;
-  box-shadow: var(--nm-out-sm);
-  padding: 0 12px;
-  color: var(--sky-mid);
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: box-shadow 0.16s ease, color 0.16s ease;
-}
+/* I bottoni delle modalita' stanno nella barra a sinistra dal 2026-09-23
+   (.rail-btn, piu' in alto): qui restano solo i loro stati.
 
-#saved-drafts-open:hover,
-#training-mode-open:hover,
-#tournament-mode-open:hover {
-  box-shadow: var(--nm-out);
-  color: var(--sky-light);
-}
-
-#saved-drafts-open:active,
-#training-mode-open:active,
-#tournament-mode-open:active {
-  box-shadow: var(--nm-in-sm);
-}
-
-/* Modalita' ACCESA: il bottone resta premuto dentro il materiale con la sua
+   Modalita' ACCESA: il bottone resta premuto dentro il materiale con la sua
    tinta di stato. Il verde (torneo) e l'ambra (training) restano quelli di
    sempre: portano informazione, non sono decorazione, e il neumorphism non
    li tocca. */
@@ -1309,10 +1372,15 @@ body {
   flex: none;
 }
 
-/* Intestazione: interruttore, stato dei dati e bottone di aggiornamento.
-   Restano visibili anche quando non c'e' nessun suggerimento da mostrare
-   (a 0 pick, o dopo il quinto) - e' il motivo per cui il pannello non si
-   nasconde piu'. */
+/* Dal 2026-09-23 interruttore, stato dei dati e "Aggiorna dati" stanno nelle
+   Impostazioni: il pannello non deve piu' restare a vista per ospitarli, e
+   sparisce quando non ha niente da mostrare (vedi renderSuggestionsPanel).
+   Nell'intestazione resta solo il filtro "Solo pool op.gg". */
+#suggestions-panel.hidden,
+#suggestions-panel-head.hidden {
+  display: none;
+}
+
 #suggestions-panel-head {
   display: flex;
   align-items: center;
@@ -1324,8 +1392,6 @@ body {
 #suggestions-data-info {
   font-size: 11px;
   color: var(--text-dim);
-  flex: 1;
-  min-width: 0;
 }
 
 #suggestions-sync {
@@ -1758,7 +1824,9 @@ body {
 
 /* Disabilitato = piatto, vedi la nota su .pool-import button:disabled. */
 #training-mode-open:disabled,
-#tournament-mode-open:disabled {
+#tournament-mode-open:disabled,
+#training-mode-open:disabled:hover,
+#tournament-mode-open:disabled:hover {
   cursor: default;
   box-shadow: none;
   background: var(--nm-surface-lo);
@@ -2111,7 +2179,6 @@ body {
 
 #icon-size-slider,
 #sidebar-size-slider {
-  width: 90px;
   cursor: pointer;
   /* Binario scavato + pomello estruso, stessa lettura degli interruttori.
      accent-color (che bastava col tema precedente) non permette di dare al
@@ -3475,8 +3542,81 @@ body.comp-borders-off .suggestion-icon-wrap {
 #roster-modal .modal-content,
 #tournament-modal .modal-content,
 #training-modal .modal-content,
-#saved-drafts-modal .modal-content {
+#saved-drafts-modal .modal-content,
+#settings-modal .modal-content {
   zoom: 1.5;
+}
+
+/* ---------- Impostazioni (2026-09-23) ----------
+   Stessa famiglia dei modali qui sopra (ingrandito del 50%, limiti in unita'
+   di viewport divisi per lo zoom). Due classi per battere .modal-content,
+   vedi .modal-content.tournament-modal-content. */
+.modal-content.settings-modal-content {
+  width: min(480px, calc(92vw / 1.5));
+  height: auto;
+  max-height: calc(92vh / 1.5);
+  overflow-y: auto;
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-section h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+/* Una voce: nome a sinistra, controllo a destra. Scavata nel materiale come
+   gli slot, cosi' le voci si leggono come righe di un elenco. */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  box-shadow: var(--nm-in-xs);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.settings-row + .settings-row {
+  margin-top: 8px;
+}
+
+label.settings-row {
+  cursor: pointer;
+}
+
+.settings-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-note {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+/* Con il lavoro per comp spento i counter naturali non esistono: la voce
+   resta leggibile ma spenta. */
+.settings-row.settings-off {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.settings-row input[type="range"] {
+  width: 150px;
+  flex: none;
 }
 
 /* Il velo si ancora al modale, quindi quello deve fare da riferimento:
