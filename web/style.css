@@ -1382,6 +1382,12 @@ body {
   display: none;
 }
 
+/* Le righe dei ban si staccano un po' da quelle dei pick: sono un'altra
+   domanda ("cosa togliere", non "cosa prendere"). */
+.suggestions-row:not(.suggestions-row-ban) + .suggestions-row-ban {
+  margin-top: 14px;
+}
+
 .suggestions-row-label {
   flex: none;
   width: 46px;

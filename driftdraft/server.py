@@ -22,6 +22,7 @@ from driftdraft.comps import (
 from driftdraft.data import COMP_COLUMNS, ROLE_COLUMNS, TAG_COLUMNS, load_champions
 from driftdraft.drafter_live import get_session as get_live_draft_session
 from driftdraft import leaguepedia
+from driftdraft import soloq
 from driftdraft import training_bot
 from driftdraft.draft_evaluation import EvaluationError, evaluate_live_draft, evaluate_session
 from driftdraft.lolalytics import DEFAULT_TIER, ROLE_TO_LANE, VALID_TIERS, NoCounterDataError, fetch_counters
@@ -461,6 +462,26 @@ def api_counters():
     if tier not in VALID_TIERS:
         return json.dumps({"error": "Fascia elo non valida."})
 
+    # Dai dati soloQ gia' su disco, se ci sono: risposta istantanea e nessun
+    # browser aperto. Idea dell'utente (2026-09-23): "potevamo usare gli stessi
+    # dati dei counter per dare un riscontro istantaneo... riducendo il numero
+    # di richieste considerevolmente, dato che sono gia' salvate". Solo per la
+    # fascia che scarichiamo (Emerald+); le altre due fasce, o un campione in
+    # una corsia che gioca meno del 5% delle volte (pagina non scaricata),
+    # passano ancora dal browser come prima. Stesso dato e stessa convenzione
+    # (winrate dell'AVVERSARIO), ma su un periodo diverso: il browser apre la
+    # pagina counter della sola patch corrente, i dati salvati sono gli ultimi
+    # 30 giorni. Verificato su Ahri mid il 2026-09-23: stessi 100 avversari
+    # (piu' altri 28 che nei 30 giorni superano le 100 partite), circa il
+    # doppio delle partite, scarto mediano 0.8 punti. Si tengono i 30 giorni
+    # apposta: sono gli stessi numeri da cui escono pick e ban suggeriti, e
+    # la ricerca counter non deve contraddirli.
+    if tier == soloq.TIER:
+        dati = soloq.load()
+        righe = dati.lane_counters(champion, ROLE_TO_LANE[role]) if dati else None
+        if righe:
+            return json.dumps({"counters": righe, "source": "soloq"}, ensure_ascii=False)
+
     try:
         entries = fetch_counters(champion, role, tier)
     except NoCounterDataError:
@@ -868,8 +889,12 @@ def api_pick_suggestions():
     blue_picks = body.get("bluePicks")
     red_picks = body.get("redPicks")
     taken = body.get("taken")
+    # I ban di ciascun lato servono ai ban suggeriti (quanti ne mancano e in
+    # che fase si e'); un client vecchio che non li manda li ha tutti vuoti.
+    blue_bans = body.get("blueBans") or []
+    red_bans = body.get("redBans") or []
     response.content_type = "application/json"
-    for value in (blue_picks, red_picks, taken):
+    for value in (blue_picks, red_picks, taken, blue_bans, red_bans):
         if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
             return json.dumps({"error": "Dati draft non validi."})
 
@@ -923,6 +948,8 @@ def api_pick_suggestions():
         if sessione_serie:
             esclusi |= sessione_serie.series_champions()
 
+    # Letto una volta per pick e ban insieme: vedi rank_ban_suggestions.
+    campioni = load_champions()
     try:
         ranked = training_bot.rank_pick_suggestions(
             blue_picks,
@@ -932,10 +959,15 @@ def api_pick_suggestions():
             red_profile=red_profile,
             blue_comps=blue_comps,
             red_comps=red_comps,
+            all_champs=campioni,
         )
     except ValueError as e:
         return json.dumps({"error": str(e)})
 
+    ranked["bans"] = training_bot.rank_ban_suggestions(
+        blue_picks, red_picks, blue_bans, red_bans, esclusi,
+        blue_profile=blue_profile, red_profile=red_profile, all_champs=campioni,
+    )
     return json.dumps(ranked, ensure_ascii=False)
 
 
@@ -1000,6 +1032,7 @@ def api_live_draft_suggestions():
             elif lato_nostro == "red" and red_profile is None:
                 red_profile = profilo_nostro
         blue_comps, red_comps = _comp_flags(body, lato_nostro)
+        campioni = load_champions()
         ranked = training_bot.rank_pick_suggestions(
             blue_picks,
             red_picks,
@@ -1008,6 +1041,11 @@ def api_live_draft_suggestions():
             red_profile=red_profile,
             blue_comps=blue_comps,
             red_comps=red_comps,
+            all_champs=campioni,
+        )
+        ranked["bans"] = training_bot.rank_ban_suggestions(
+            blue_picks, red_picks, blue_bans, red_bans, taken,
+            blue_profile=blue_profile, red_profile=red_profile, all_champs=campioni,
         )
     except ValueError as e:
         return json.dumps({"error": str(e)})
@@ -1200,8 +1238,14 @@ def api_training_sync():
     non aveva modo di dire a che punto fosse. Ora il lavoro gira in un thread
     e l'avanzamento si legge da /api/training/sync-progress."""
     response.content_type = "application/json"
+    # Dal 2026-09-23 lo stesso bottone scarica anche i dati soloQ (vedi
+    # soloq.py): l'utente, "con un 'aggiorna dati' in 10-20 minuti si hanno
+    # tutte le risposte necessarie". Partono insieme - siti diversi, nessuna
+    # ragione di aspettare - e ognuno racconta il suo avanzamento.
     try:
-        return json.dumps(leaguepedia.start_sync(), ensure_ascii=False)
+        esito = leaguepedia.start_sync()
+        esito["soloq"] = soloq.start_sync()
+        return json.dumps(esito, ensure_ascii=False)
     except Exception as e:
         return json.dumps({"error": f"Impossibile avviare l'aggiornamento: {e}"})
 
@@ -1212,7 +1256,9 @@ def api_training_sync_progress():
     stato dei dati su disco. Sola lettura, nessuna richiesta di rete: la UI
     la interroga a intervalli mentre il sync gira."""
     response.content_type = "application/json"
-    return json.dumps(leaguepedia.sync_progress(), ensure_ascii=False)
+    stato = leaguepedia.sync_progress()
+    stato["soloq"] = soloq.sync_progress()
+    return json.dumps(stato, ensure_ascii=False)
 
 
 @app.get("/api/training/teams")

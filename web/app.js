@@ -34,10 +34,10 @@ const backend = window.pywebview
       liveDraftRoleGuess: (picks, players, team) =>
         window.pywebview.api.live_draft_role_guess(picks, players, team),
       pickSuggestions: (bluePicks, redPicks, taken, bluePlayers, redPlayers,
-                       useTrainingBotProfile, ourTeam, ourSide, compBorders) =>
+                       useTrainingBotProfile, ourTeam, ourSide, compBorders, blueBans, redBans) =>
         window.pywebview.api.pick_suggestions(
           bluePicks, redPicks, taken, bluePlayers, redPlayers,
-          useTrainingBotProfile, ourTeam, ourSide, compBorders),
+          useTrainingBotProfile, ourTeam, ourSide, compBorders, blueBans, redBans),
       listSavedDrafts: () => window.pywebview.api.list_saved_drafts(),
       addSavedDraft: (name, champions) => window.pywebview.api.add_saved_draft(name, champions),
       deleteSavedDraft: (id) => window.pywebview.api.delete_saved_draft(id),
@@ -172,13 +172,13 @@ const backend = window.pywebview
           body: JSON.stringify({ picks, players, team }),
         }).then((r) => r.json()),
       pickSuggestions: (bluePicks, redPicks, taken, bluePlayers, redPlayers,
-                       useTrainingBotProfile, ourTeam, ourSide, compBorders) =>
+                       useTrainingBotProfile, ourTeam, ourSide, compBorders, blueBans, redBans) =>
         fetch("/api/pick-suggestions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             bluePicks, redPicks, taken, bluePlayers, redPlayers,
-            useTrainingBotProfile, ourTeam, ourSide, compBorders,
+            useTrainingBotProfile, ourTeam, ourSide, compBorders, blueBans, redBans,
           }),
         }).then((r) => r.json()),
       listSavedDrafts: () => fetch("/api/saved-drafts").then((r) => r.json()),
@@ -585,6 +585,10 @@ let blueThin = false;
 let redThin = false;
 let blueNames = new Set(); // stessi nomi, come Set - solo per un lookup rapido dentro renderGrid
 let redNames = new Set();
+// Ban suggeriti per lato (2026-09-23): [{champion, role, score, reasons}].
+// Arrivano nella stessa risposta dei pick suggeriti, vedi rank_ban_suggestions.
+let blueBanSuggestions = [];
+let redBanSuggestions = [];
 // Numero di sequenza incrementato ad ogni fetch avviato: una risposta che
 // arriva quando non e' piu' la piu' recente (es. due fetch quasi
 // consecutivi per due cambi di stato ravvicinati, la prima risponde DOPO la
@@ -4283,6 +4287,11 @@ function setupSuggestionsToggle() {
   // letteralmente invisibile (un contenitore flex senza figli), da quando
   // c'e' l'etichetta "Blue Side"/"Red Side" invece resterebbe a video da sola.
   renderSuggestionsPanel();
+  // A draft vuota i PICK suggeriti non hanno niente da dire, ma i BAN si'
+  // (2026-09-23): i primi tre ban vengono prima di qualunque pick. Senza
+  // questa richiesta le righe dei ban comparirebbero solo al primo cambio
+  // della draft, cioe' quando i primi ban sono gia' stati fatti.
+  refreshSuggestions();
   suggestionsToggle.addEventListener("change", () => {
     suggestionsEnabled = suggestionsToggle.checked;
     localStorage.setItem("suggestionsEnabled", suggestionsEnabled);
@@ -4988,9 +4997,32 @@ function formatSyncMessage(progress) {
   return `${d.draftsCount} draft${patches ? ` (patch ${patches})` : ""} - aggiornate il ${when}`;
 }
 
+// La parte soloQ del messaggio (2026-09-23): lo stesso "Aggiorna dati"
+// scarica anche i dati lolalytics, in parallelo, e ognuno racconta il suo
+// avanzamento. Senza dati soloQ l'app funziona come prima, ma senza
+// risposte ai campioni che i pro non giocano: va detto.
+function formatSoloqMessage(sq) {
+  if (!sq) return "";
+  const d = sq.data || {};
+  if (sq.running) {
+    if (sq.phase === "attesa") return `soloQ: attendo ${sq.seconds}s e riprovo (tentativo ${sq.attempt})...`;
+    if (sq.phase === "salvo") return "soloQ: salvo...";
+    return `soloQ: ${sq.done || 0}/${sq.target || "?"} richieste a lolalytics...`;
+  }
+  if (sq.phase === "errore") return `soloQ: ${sq.error || "scaricamento non riuscito"}`;
+  if (!d.synced) return "dati soloQ non ancora scaricati";
+  const when = d.fetchedAt ? new Date(d.fetchedAt * 1000).toLocaleDateString("it-IT") : "?";
+  return `soloQ Emerald+ del ${when}`;
+}
+
+function syncRunning(progress) {
+  return !!(progress.running || progress.soloq?.running);
+}
+
 async function refreshSuggestionsDataInfo() {
   const progress = await backend.trainingSyncProgress();
-  const text = formatSyncMessage(progress);
+  const soloqText = formatSoloqMessage(progress.soloq);
+  const text = [formatSyncMessage(progress), soloqText].filter(Boolean).join(" · ");
 
   const info = document.getElementById("suggestions-data-info");
   if (info) info.textContent = text;
@@ -4999,18 +5031,18 @@ async function refreshSuggestionsDataInfo() {
   // secondo avvio (vedi start_sync), ma un bottone che resta cliccabile e
   // non fa nulla e' peggio di uno spento.
   const btn = document.getElementById("suggestions-sync");
-  if (btn) btn.disabled = !!progress.running;
+  if (btn) btn.disabled = syncRunning(progress);
 
-  if (progress.running && !suggestionsSyncPollTimer) {
+  if (syncRunning(progress) && !suggestionsSyncPollTimer) {
     // 2s: il sync dura minuti e cambia stato di rado (una volta per pagina o
     // per tentativo), non serve un poll fitto.
     suggestionsSyncPollTimer = setInterval(refreshSuggestionsDataInfo, 2000);
-  } else if (!progress.running && suggestionsSyncPollTimer) {
+  } else if (!syncRunning(progress) && suggestionsSyncPollTimer) {
     clearInterval(suggestionsSyncPollTimer);
     suggestionsSyncPollTimer = null;
     // Dati nuovi su disco: i suggerimenti a video sono calcolati su quelli
-    // vecchi finche' non si rifanno.
-    if (progress.phase === "fatto") refreshSuggestions();
+    // vecchi finche' non si rifanno. Basta che uno dei due sia arrivato.
+    if (progress.phase === "fatto" || progress.soloq?.phase === "fatto") refreshSuggestions();
   }
 }
 
@@ -5058,25 +5090,35 @@ function suggestionTitle(name) {
     if (s.tier) return `, tier ${s.tier}`;
     return `, quanto lo giocano: ${Math.round(s.affinity * 100)}%`;
   };
+  // Quante di quelle osservazioni vengono dal soloQ (lolalytics) invece che
+  // dalle draft pro: una risposta a Briar non e' un'abitudine pro, e il coach
+  // deve poterlo sapere.
+  const soloq = (s) => {
+    if (!s || !s.soloq) return "";
+    return s.soloq >= s.score - 0.01 ? ", tutto dal soloQ" : `, di cui ${s.soloq} dal soloQ`;
+  };
   if (blu && rosso) {
-    return `${name} — CONTESO${where}: conviene al Blue Side (${blu.score}${quanto(blu)}) e al Red Side (${rosso.score}${quanto(rosso)})`;
+    return `${name} — CONTESO${where}: conviene al Blue Side (${blu.score}${soloq(blu)}${quanto(blu)}) e al Red Side (${rosso.score}${soloq(rosso)}${quanto(rosso)})`;
   }
   if (blu)
-    return `${name} — per il Blue Side${where} (punteggio sinergia/counter: ${blu.score}${quanto(blu)})`;
-  return `${name} — per il Red Side${where} (punteggio sinergia/counter: ${rosso.score}${quanto(rosso)})`;
+    return `${name} — per il Blue Side${where} (punteggio sinergia/counter: ${blu.score}${soloq(blu)}${quanto(blu)})`;
+  return `${name} — per il Red Side${where} (punteggio sinergia/counter: ${rosso.score}${soloq(rosso)}${quanto(rosso)})`;
 }
 
 // Una card del pannello, identica per le due righe: cambia solo la cornice,
 // che dipende dallo stato del campione e non dalla riga in cui si trova - e'
 // cosi' che un pick conteso appare mezzo dorato e mezzo rosso in ENTRAMBE.
-function buildSuggestionCard(entry) {
+// `title` lo passa chi la usa per qualcosa che non e' un pick suggerito (i
+// ban suggeriti): suggestionTitle cerca il campione negli elenchi dei pick, e
+// per un campione che li' non c'e' non avrebbe niente da dire.
+function buildSuggestionCard(entry, title = null) {
   const champ = champions.find((c) => c.name === entry.champion);
   if (!champ) return null;
 
   const card = document.createElement("div");
-  const state = suggestionState(entry.champion);
+  const state = title ? "" : suggestionState(entry.champion);
   card.className = "suggestion-card" + (state ? " " + state : "");
-  card.title = suggestionTitle(entry.champion);
+  card.title = title || suggestionTitle(entry.champion);
   // Cliccabile e trascinabile esattamente come una card della griglia:
   // stesso placeChampion, quindi in torneo un click qui e' un'azione VERA
   // sulla draft, come lo e' in griglia. Nessuna scorciatoia diversa. Vale
@@ -5129,6 +5171,33 @@ function buildSuggestionCard(entry) {
   // mostra, e l'utente ha chiesto coerenza ("o tutti o nessuno"). Il nome
   // resta nel title della card, insieme a corsia e punteggio.
   return card;
+}
+
+// Card di un ban suggerito: stessa struttura di quella di un pick (corsia +
+// icona, stesso click e trascinamento), senza la cornice blu/rossa, che nelle
+// righe dei pick vuol dire "buono per quel lato". Il tooltip dice PERCHE':
+// meta, pool nemica, quale nostro campione minaccia.
+function buildBanCard(entry, side) {
+  const lato = side === "blue" ? "Blue Side" : "Red Side";
+  const where = entry.role ? ` (${entry.role})` : "";
+  const motivi = (entry.reasons || []).join("; ");
+  const title = `${entry.champion}${where} — ban suggerito al ${lato}${motivi ? ": " + motivi : ""}`;
+  const card = buildSuggestionCard({ champion: entry.champion, role: entry.role }, title);
+  if (card) card.classList.add("ban-suggestion");
+  return card;
+}
+
+function fillBanRow(side, entries) {
+  const row = document.getElementById(`suggestions-row-ban-${side}`);
+  const list = row.querySelector(".suggestions-row-list");
+  list.innerHTML = "";
+  const show = suggestionsEnabled && entries.length > 0;
+  row.classList.toggle("hidden", !show);
+  if (!show) return;
+  for (const entry of entries) {
+    const card = buildBanCard(entry, side);
+    if (card) list.appendChild(card);
+  }
 }
 
 // Una delle due righe. `pickCount` sono i pick GIA' fatti dalla squadra a cui
@@ -5221,6 +5290,8 @@ function renderSuggestionsPanel() {
 
   fillSuggestionsRow("blue", blueSuggestions, teams.left.filter((n) => n).length, blueThin);
   fillSuggestionsRow("red", redSuggestions, teams.right.filter((n) => n).length, redThin);
+  fillBanRow("blue", blueBanSuggestions);
+  fillBanRow("red", redBanSuggestions);
 }
 
 function refreshSuggestions() {
@@ -5238,6 +5309,8 @@ async function _doRefreshSuggestions() {
       redNames = new Set();
       renderGrid();
     }
+    blueBanSuggestions = [];
+    redBanSuggestions = [];
     blueThin = false;
     redThin = false;
     renderSuggestionsPanel();
@@ -5275,7 +5348,11 @@ async function _doRefreshSuggestions() {
       ourSide,
       // I "bordi comp" spenti significano "non guidarmi con le comp": spegne
       // il ragionamento sul NOSTRO lato. Vedi _comp_flags lato server.
-      compBordersEnabled
+      compBordersEnabled,
+      // Per i ban suggeriti: quanti ban ha gia' fatto ogni lato decide se si
+      // e' in prima o in seconda fase (vedi rank_ban_suggestions).
+      bans.left.filter(Boolean),
+      bans.right.filter(Boolean)
     );
   }
   if (seq !== suggestionsFetchSeq) return; // superata da una richiesta piu' recente, scartata
@@ -5288,6 +5365,8 @@ async function _doRefreshSuggestions() {
   redSuggestions = ok ? result.red?.suggestions || [] : [];
   blueThin = ok && !!result.blue?.thin;
   redThin = ok && !!result.red?.thin;
+  blueBanSuggestions = ok ? result.bans?.blue?.bans || [] : [];
+  redBanSuggestions = ok ? result.bans?.red?.bans || [] : [];
   blueNames = new Set(blueSuggestions.map((s) => s.champion));
   redNames = new Set(redSuggestions.map((s) => s.champion));
   renderGrid();

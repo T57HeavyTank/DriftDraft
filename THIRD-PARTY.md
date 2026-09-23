@@ -87,7 +87,10 @@ Non ridistribuiti: l'applicazione li apre nel momento in cui l'utente lo
 chiede, con le sue credenziali quando servono.
 
 - **op.gg** — pool di campioni di giocatori e squadre
-- **lolalytics** — curve di winrate e counter
+- **lolalytics** — curve di winrate e counter; con "Aggiorna dati" anche i
+  dati soloQ (Emerald+, ultimi 30 giorni) su cui si basano counter, sinergia
+  bot-support e ban suggeriti. Li scarica l'app sul computer di chi la usa, in
+  `data/soloq.json`: non sono nel pacchetto.
 - **u.gg** — dati di supporto
 - **drafter.lol** — la draft room vera della modalità torneo
 

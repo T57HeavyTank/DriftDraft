@@ -59,3 +59,8 @@ assets/splash/
 
 data/roster.json
 data/saved_drafts.json
+
+# Dati soloQ di lolalytics: li scarica l'app di chi la usa ("Aggiorna dati"),
+# non vanno ridistribuiti ne' nella repo ne' nell'installer. Vedi soloq.py.
+data/soloq.json
+data/soloq.json.tmp

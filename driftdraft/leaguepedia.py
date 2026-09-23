@@ -106,7 +106,11 @@ DRAFT_SEQUENCE: list[tuple[str, str, int]] = [
 #   1 = counter simmetrico (ogni scontro contato nei due versi)
 #   2 = counter direzionale "A pescato dopo B" (2026-09-06)
 #   3 = + i ban di seconda fase come counter (2026-09-06)
-TABLES_SCHEMA = 5
+#   4 = + statistiche comp (comp_stats)
+#   5 = + pool delle squadre pro (team_pools)
+#   6 = + ban_counts, quante volte ogni campione e' stato bannato (2026-09-23,
+#       per i ban suggeriti: la "presenza" pro di un campione e' pick + ban)
+TABLES_SCHEMA = 6
 
 PICK_ORDER: dict[tuple[str, int], int] = {}
 # Passo assoluto nella sequenza (1..20), per pick E ban: serve a sapere cosa
@@ -674,6 +678,7 @@ def build_tables(drafts: list[ProDraft]) -> dict:
     synergy: dict[str, dict[str, int]] = {}
     counter: dict[str, dict[str, int]] = {}
     pick_counts: dict[str, int] = {}
+    ban_counts: dict[str, int] = {}
     role_counts: dict[str, dict[str, int]] = {}
 
     def bump(table: dict[str, dict[str, int]], a: str, b: str) -> None:
@@ -685,6 +690,9 @@ def build_tables(drafts: list[ProDraft]) -> dict:
     for d in drafts:
         for name in d.team1_picks + d.team2_picks:
             pick_counts[name] = pick_counts.get(name, 0) + 1
+        for name in d.team1_bans + d.team2_bans:
+            if name:
+                ban_counts[name] = ban_counts.get(name, 0) + 1
 
         # zip() si ferma al piu' corto dei due: se una draft avesse i ruoli
         # incompleti (capita su righe Leaguepedia parziali) i pick restanti
@@ -740,6 +748,10 @@ def build_tables(drafts: list[ProDraft]) -> dict:
         "synergy": synergy,
         "counter": counter,
         "pick_counts": pick_counts,
+        # Quante volte bannato, tutte le fasi. Serve ai ban suggeriti (vedi
+        # training_bot.rank_ban_suggestions): il peso "meta" di un campione,
+        # tarato sui ban pro, e' la sua presenza totale, pick + ban.
+        "ban_counts": ban_counts,
         "role_counts": role_counts,
         # Ricalcolate ad ogni ricostruzione: e' cosi' che il bot segue il meta
         # invece di inseguirlo. Vedi build_comp_stats.

@@ -32,10 +32,12 @@ HTTP della mossa del trainee).
 import random
 import threading
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import permutations
+from math import exp, log
 
-from driftdraft import leaguepedia
+from driftdraft import leaguepedia, soloq
 from driftdraft.comps import COMP_BEATS, COMP_REQUIREMENTS, MEMBER_THRESHOLD
 from driftdraft.data import load_champions
 
@@ -1261,6 +1263,165 @@ def _support(score: float) -> float:
     return score / peso if peso else score
 
 
+# --- SOLOQ nei pick suggeriti (2026-09-23) ---------------------------------
+#
+# Il problema, dall'utente dopo tre settimane d'uso: davanti a Briar o Evelynn
+# l'app non suggeriva nulla, perche' i pro non li giocano mai (sono punibili ad
+# alto livello) e quindi nei conteggi pro nessuno ha mai "risposto" a loro. In
+# Emerald invece sono forti. Vedi soloq.py per i dati e per cosa si e' misurato.
+#
+# COME ENTRANO. Il punteggio dei suggerimenti e' un numero di OSSERVAZIONI pro
+# (counter[c][e] = volte in cui c e' stato preso in risposta a e). Il soloQ ci
+# si aggiunge nella stessa unita', come osservazioni "a priori":
+#
+#     K_e * q(c|e)      q(c|e) ~ pick rate soloQ di c nella corsia di e ^ a
+#                                * exp(b * vantaggio soloQ di c su e)
+#
+# q e' "come risponderebbe a e un giocatore che sceglie guardando il soloQ".
+# a e b sono tarati con un logit condizionale sulle 6279 risposte di corsia
+# delle partite pro dal 2026-08-12 (DriftDraft-analisi/lola_calibra_app.py):
+# a = 0.856, b = 0.364 per punto di winrate. Solo la STESSA corsia: il
+# vantaggio soloQ fra corsie diverse esiste ma e' un quinto (+0.05 contro
+# +0.28 nelle risposte pro), non vale la complicazione.
+#
+# K_e = quanto pesa il soloQ. Sulle partite pro il valore che predice meglio
+# la risposta vera (partita esclusa dai conteggi) e' 20 osservazioni: col
+# soloQ la previsione migliora rispetto ai soli conteggi pro (log-lik media
+# -3.018 contro -3.110). Ma con 20 fisse il miglior counter di Briar varrebbe
+# 1.6-2.6 osservazioni, sotto MIN_SUPPORT: il paradosso resterebbe intatto.
+# Quindi ogni campione nemico conta ALMENO quanto uno tipico - le risposte pro
+# che ha un campione mediano (152 sulle 3000 draft del 2026-09-23, ricalcolato
+# ogni volta dalle tabelle) - e dove i pro non arrivano ci arriva il soloQ:
+#     K_e = max(20, tipico - risposte pro a e)
+# Azir (300 risposte) prende 20: il soloQ sposta al massimo un paio di
+# osservazioni e comandano i pro. Briar (0) prende 152: il suo miglior counter
+# soloQ vale 12-20 osservazioni, alla pari di una risposta pro vera.
+SOLOQ_COUNTER_SHARE = 0.856
+SOLOQ_COUNTER_ADV = 0.364
+SOLOQ_COUNTER_PRIOR = 20.0
+# Sinergia: solo tiratore-support, l'unica coppia di corsie in cui i pro
+# seguono la sinergia soloQ (z +39; nelle altre nove niente). Stesso schema,
+# tarato sulle 2522 coppie bot-support pro: il peso minimo che predice meglio
+# e' 10, e un tiratore o support raro conta almeno quanto le partite di un
+# campione mediano (74 pick).
+SOLOQ_SYNERGY = {
+    # corsia del CANDIDATO: (peso del pick rate, peso della sinergia per punto)
+    "support": (1.204, 0.469),  # support scelto dato il tiratore
+    "bottom": (1.121, 0.792),  # tiratore scelto dato il support
+}
+SOLOQ_SYNERGY_PRIOR = 10.0
+
+
+def _median(values: list[float]) -> float:
+    v = sorted(values)
+    if not v:
+        return 0.0
+    m = len(v) // 2
+    return float(v[m]) if len(v) % 2 else (v[m - 1] + v[m]) / 2.0
+
+
+def _guess_lanes(names: list[str], sq, champs_by_name: dict) -> dict[str, str]:
+    """In che corsia gioca ciascuno dei campioni di UNA squadra (corsie del
+    sito: top/jungle/...). Assegnazione a corsie distinte che massimizza la
+    quota soloQ di partite di ciascuno in quella corsia; i tag di ruolo
+    dell'xlsx fanno da ripiego quando il soloQ non dice niente. Al massimo 5
+    campioni: 120 permutazioni, forza bruta."""
+    nomi = [n for n in names if n][:5]
+    if not nomi:
+        return {}
+
+    def peso(n: str, lane: str) -> float:
+        q = sq.lane_share(n).get(lane, 0.0) if sq else 0.0
+        champ = champs_by_name.get(n)
+        tag = bool(champ and soloq.LANE_TO_ROLE[lane] in champ.roles)
+        return log(q + (0.02 if tag else 0.0005))
+
+    migliore, valore = None, float("-inf")
+    for perm in permutations(soloq.LANES, len(nomi)):
+        v = sum(peso(n, l) for n, l in zip(nomi, perm))
+        if v > valore:
+            migliore, valore = perm, v
+    return dict(zip(nomi, migliore))
+
+
+def _response_totals(counter: dict) -> dict[str, int]:
+    """Quante risposte pro ha ricevuto ogni campione (somma di counter[*][e])."""
+    tot: dict[str, int] = defaultdict(int)
+    for row in counter.values():
+        for e, v in row.items():
+            tot[e] += v
+    return tot
+
+
+def _soloq_bonus(
+    picks: list[str],
+    opponents: list[str],
+    free_roles: dict[str, set[str]],
+    sq,
+    counter: dict,
+    pick_counts: dict,
+    champs_by_name: dict,
+) -> dict[str, tuple[float, str | None]]:
+    """Le osservazioni soloQ per ogni candidato: {nome: (quante, ruolo)}.
+
+    Il ruolo e' quello da cui arriva la parte piu' grande del contributo
+    (la corsia del nemico a cui risponde, o quella rimasta libera nel bot):
+    serve a mostrare la corsia giusta quando il suggerimento viene tutto dal
+    soloQ - per una risposta a Briar i dati pro non sanno dire niente.
+    Solo candidati che hanno ANCORA libera quella corsia (free_roles)."""
+    if sq is None:
+        return {}
+    bonus: dict[str, float] = defaultdict(float)
+    per_ruolo: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+
+    def distribuisci(pesi: dict[str, float], k: float, ruolo: str) -> None:
+        if not pesi:
+            return
+        m = max(pesi.values())
+        z = sum(exp(v - m) for v in pesi.values())
+        for c, v in pesi.items():
+            if ruolo in free_roles.get(c, ()):
+                b = k * exp(v - m) / z
+                bonus[c] += b
+                per_ruolo[c][ruolo] += b
+
+    # counter, corsia contro corsia
+    risposte = _response_totals(counter)
+    tipico_c = _median([risposte.get(e, 0) for e in pick_counts])
+    for e, lane in _guess_lanes(opponents, sq, champs_by_name).items():
+        pesi = {}
+        for c in sq.champions_in(lane):
+            pr = sq.pick_rate(c, lane)
+            if c == e or pr <= 0:
+                continue
+            adv = sq.advantage(c, lane, e, lane) or 0.0
+            pesi[c] = SOLOQ_COUNTER_SHARE * log(pr) + SOLOQ_COUNTER_ADV * adv
+        k = max(SOLOQ_COUNTER_PRIOR, tipico_c - risposte.get(e, 0))
+        distribuisci(pesi, k, soloq.LANE_TO_ROLE[lane])
+
+    # sinergia, solo tiratore-support
+    tipico_s = _median([float(v) for v in pick_counts.values() if v])
+    for p, lane in _guess_lanes(picks, sq, champs_by_name).items():
+        if lane not in ("bottom", "support"):
+            continue
+        altra = "support" if lane == "bottom" else "bottom"
+        peso_pr, peso_syn = SOLOQ_SYNERGY[altra]
+        pesi = {}
+        for c in sq.champions_in(altra):
+            pr = sq.pick_rate(c, altra)
+            if c == p or pr <= 0:
+                continue
+            d = sq.duo_synergy(c, p) if altra == "support" else sq.duo_synergy(p, c)
+            pesi[c] = peso_pr * log(pr) + peso_syn * (d or 0.0)
+        k = max(SOLOQ_SYNERGY_PRIOR, tipico_s - pick_counts.get(p, 0))
+        distribuisci(pesi, k, soloq.LANE_TO_ROLE[altra])
+
+    return {
+        c: (b, max(per_ruolo[c], key=per_ruolo[c].get) if per_ruolo[c] else None)
+        for c, b in bonus.items()
+    }
+
+
 def _can_cover(role_sets: list[set[str]]) -> bool:
     """C'e' un modo di dare a ciascun campione un ruolo DISTINTO fra i suoi?
 
@@ -1382,6 +1543,8 @@ def _rank_one_side(
     profile: dict | None = None,
     comps_enabled: bool = True,
     comp_stats: dict | None = None,
+    sq=None,
+    pick_counts: dict | None = None,
 ) -> list[dict]:
     """Il ranking vero e proprio, per UNA squadra sola.
 
@@ -1415,8 +1578,17 @@ def _rank_one_side(
         roles = set(champ.roles) & all_roles if champ.roles else set(all_roles)
         return (roles or all_roles) - blocked
 
+    liberi = {c.name: open_roles(c) for c in all_champs if c.name not in taken}
+    # Le osservazioni soloQ si SOMMANO a quelle pro, nella stessa unita': vedi
+    # SOLOQ_COUNTER_PRIOR. Senza dati soloQ scaricati il dizionario e' vuoto e
+    # tutto resta com'era.
+    extra = _soloq_bonus(picks, opponents, liberi, sq, counter, pick_counts or {}, champs_by_name)
     scored = [
-        (c.name, _pick_score(c.name, picks, opponents, synergy, counter), open_roles(c))
+        (
+            c.name,
+            _pick_score(c.name, picks, opponents, synergy, counter) + extra.get(c.name, (0.0, None))[0],
+            liberi[c.name],
+        )
         for c in all_champs
         if c.name not in taken
     ]
@@ -1470,6 +1642,13 @@ def _rank_one_side(
         )
         for name, _, free in top
     }
+    # Un suggerimento che viene soprattutto dal soloQ mostra la corsia da cui
+    # quel contributo arriva: una risposta a Briar e' una risposta in JUNGLE,
+    # e i dati pro - che Briar non l'hanno mai vista - non lo sanno dire.
+    for name, score, _ in top:
+        soloq_parte, ruolo_soloq = extra.get(name, (0.0, None))
+        if ruolo_soloq and soloq_parte > score - soloq_parte and ruolo_soloq in allowed[name]:
+            allowed[name] = {ruolo_soloq}
     roles = _suggest_roles([name for name, _, _ in top], opponents, role_counts, allowed)
     return {
         "suggestions": [
@@ -1481,6 +1660,10 @@ def _rank_one_side(
                 # parte, cosi' la UI puo' spiegare perche' l'ordine non segue
                 # il numero.
                 "score": round(score, 2),
+                # Quante di quelle osservazioni vengono dal soloQ (None se
+                # nessuna): il tooltip lo dice, cosi' il coach sa che una
+                # risposta a Briar non e' un'abitudine pro.
+                "soloq": round(extra[name][0], 2) if extra.get(name, (0.0,))[0] >= 0.05 else None,
                 "role": roles.get(name),
                 "affinity": round(affinita[name], 3) if profile else None,
                 # Presente solo per un profilo che nasce da tier list scritte a
@@ -1505,6 +1688,7 @@ def rank_pick_suggestions(
     red_profile: dict | None = None,
     blue_comps: bool = True,
     red_comps: bool = True,
+    all_champs: list | None = None,
 ) -> dict:
     """"Pick suggeriti" per le due squadre: {"blue": {...}, "red": {...}}.
 
@@ -1586,7 +1770,7 @@ def rank_pick_suggestions(
     cache e riapre il file ogni volta, e questa funzione gira ad ogni cambio
     di stato della draft - in torneo anche piu' volte di seguito.
     """
-    all_champs = load_champions()
+    all_champs = all_champs if all_champs is not None else load_champions()
     champs_by_name = {c.name: c for c in all_champs}
     tables = leaguepedia.load_tables()
     synergy = tables.get("synergy", {})
@@ -1598,16 +1782,292 @@ def rank_pick_suggestions(
         )
 
     comp_stats = tables.get("comp_stats") or {}
+    # None se l'utente non ha ancora scaricato i dati soloQ: i suggerimenti
+    # restano quelli dei soli dati pro, identici a prima.
+    sq = soloq.load()
+    pick_counts = tables.get("pick_counts") or {}
 
     def side(picks, opponents, profile=None, comps=True):
         return _rank_one_side(
             picks, opponents, taken, all_champs, champs_by_name,
             synergy, counter, role_counts, top_n, profile, comps, comp_stats,
+            sq, pick_counts,
         )
 
     return {
         "blue": side(blue_picks, red_picks, blue_profile, blue_comps),
         "red": side(red_picks, blue_picks, red_profile, red_comps),
+    }
+
+
+# --- BAN SUGGERITI (2026-09-23) ---------------------------------------------
+#
+# Richiesta dell'utente: il ban suggerito "dovrebbe venire in base all'op.gg
+# nemico, combinato con le tier list del proprio team, e combinato poi da
+# quanto il campione, soprattutto in seconda fase di ban, soffre contro
+# determinati campioni". Accetta che sia un suggerimento: "anche i pro hanno
+# altri modi per bannare (campioni altamente forti al momento, campioni che
+# minacciano la comp dei propri giocatori)".
+#
+# Il punteggio e' l'utilita' di un logit condizionale TARATO SUI BAN PRO della
+# stessa finestra dei dati soloQ (DriftDraft-analisi/lola_calibra_app.py), con
+# le sole grandezze che l'app conosce davvero:
+#   pop       log(1 + presenze pro, pick + ban)
+#   aperta    quota soloQ delle partite del campione nelle corsie che il
+#             nemico deve ancora coprire
+#   forza     winrate soloQ nella sua corsia meno la media del tier
+#   minaccia  vantaggio soloQ contro i NOSTRI pick gia' fatti nella sua corsia
+#             (meta' peso per l'altra corsia del bot: e' un 2 contro 2)
+#   sin_nem   sinergia soloQ col tiratore/support nemico gia' preso
+#   procnt    log(1 + volte in cui i pro l'hanno preso in risposta ai nostri pick)
+# Prima fase (i primi tre ban, prima dei pick): conta quasi solo il meta,
+# primi 5 = ban vero nel 36% dei casi. Seconda fase: primi 5 nel 31%, contro
+# il 15% della sola popolarita' - corsie aperte e counter fanno il resto.
+BAN_WEIGHTS = {
+    1: {"pop": 1.7342, "forza": 0.0237},
+    2: {"pop": 0.7681, "aperta": 2.7337, "forza": 0.0463, "minaccia": 0.2969,
+        "sin_nem": 0.4114, "procnt": 0.4040},
+}
+# Le due parti che i pro NON permettono di tarare (non abbiamo i loro op.gg
+# ne' le loro tier list), quindi ragionate e da verificare nell'uso:
+#  - op.gg / tier list NEMICA: sapere cosa giocano quei cinque vale piu' del
+#    meta medio. L'affinita' (0..1) entra come probabilita', log(affinita'),
+#    e chi non lo gioca nessuno esce. Il meta pro invece scende a spareggio
+#    (6% del suo peso): la prima versione lo dimezzava soltanto, e contro un
+#    jungler che gioca quasi solo Briar (120 partite) il primo ban suggerito
+#    era Akali, 1299 presenze pro. Il peso tarato misura "cosa bannano i pro
+#    nel loro meta"; davanti a una squadra di cui si sa cosa gioca, la
+#    domanda giusta e' il loro main, che e' esattamente il caso da cui e'
+#    partita la richiesta. Con 0.06 i main dei cinque tornano in cima e il
+#    meta decide solo fra campioni che giocano allo stesso modo.
+#  - la NOSTRA squadra: il campione che counterera' i nostri S/A nelle corsie
+#    che dobbiamo ancora coprire pesa come la minaccia ai pick gia' fatti
+#    (stesso peso per punto: e' la stessa domanda, sul pick che verra'); e
+#    un campione che vogliamo giocare noi non si banna, si prende.
+BAN_ENEMY_POP_FACTOR = 0.06
+BAN_OUR_COMFORT_DAMP = 0.8
+BAN_PLAN_MIN_AFFINITY = 0.45  # dal tier B in su: il resto non lo prenderemmo
+BAN_SUGGESTIONS = 5
+
+
+def _lane_shares_fallback(name: str, role_counts: dict) -> dict[str, float]:
+    """Quota di partite per corsia dai dati PRO, quando il soloQ non c'e'."""
+    conti = role_counts.get(name) or {}
+    tot = sum(conti.values())
+    if not tot:
+        return {}
+    return {soloq.ROLE_TO_LANE[r]: n / tot for r, n in conti.items() if r in soloq.ROLE_TO_LANE}
+
+
+def _rank_bans_one_side(
+    ours: list[str],
+    enemies: list[str],
+    phase: int,
+    taken: set[str],
+    all_champs: list,
+    champs_by_name: dict,
+    tables: dict,
+    sq,
+    our_profile: dict | None,
+    enemy_profile: dict | None,
+    top_n: int,
+) -> list[dict]:
+    pesi = BAN_WEIGHTS[phase]
+    counter = tables.get("counter") or {}
+    presenze = defaultdict(int)
+    for tab in ("pick_counts", "ban_counts"):
+        for n, v in (tables.get(tab) or {}).items():
+            presenze[n] += v
+    role_counts = tables.get("role_counts") or {}
+
+    aperte_nemico = {soloq.ROLE_TO_LANE[r] for r in ROLE_ORDER} - {
+        soloq.ROLE_TO_LANE[r] for r in _blocked_roles(enemies, champs_by_name)
+    }
+    nostre_libere = [r for r in ROLE_ORDER if r not in _blocked_roles(ours, champs_by_name)]
+    corsie_nostre = _guess_lanes(ours, sq, champs_by_name)
+    corsie_nemiche = _guess_lanes(enemies, sq, champs_by_name)
+
+    # Cosa vogliamo ancora giocare noi, corsia per corsia: dal profilo (tier
+    # list del roster o op.gg) i campioni dal tier B in su.
+    piani: dict[str, list[tuple[str, float]]] = {}
+    if our_profile and our_profile.get("per_role"):
+        for r in nostre_libere:
+            pool = our_profile["per_role"].get(r) or {}
+            piani[soloq.ROLE_TO_LANE[r]] = sorted(
+                ((c, a) for c, a in pool.items() if a >= BAN_PLAN_MIN_AFFINITY and c not in taken),
+                key=lambda t: -t[1],
+            )[:6]
+
+    candidati = []
+    for champ in all_champs:
+        x = champ.name
+        if x in taken:
+            continue
+        quote = (sq.lane_share(x) if sq else {}) or _lane_shares_fallback(x, role_counts)
+        if not quote:
+            continue
+        giocate = {l: q for l, q in quote.items() if q >= soloq.LANE_SHARE_MIN} or quote
+        in_aperte = {l: q for l, q in giocate.items() if l in aperte_nemico}
+        lstar = max(in_aperte or giocate, key=(in_aperte or giocate).get)
+        motivi: list[tuple[float, str]] = []
+
+        pop = log(1 + presenze.get(x, 0))
+        u = 0.0
+        peso_pop = pesi["pop"]
+        aff_nemica = None
+        if enemy_profile:
+            aff_nemica = _profile_affinity(x, enemy_profile, enemies, champs_by_name)
+            if aff_nemica <= 0:
+                continue  # nessuno di loro lo gioca: bannarlo spreca il ban
+            peso_pop *= BAN_ENEMY_POP_FACTOR
+            u += log(aff_nemica)
+        u += peso_pop * pop
+
+        forza = sq.strength(x, lstar) if sq else 0.0
+        u += pesi["forza"] * forza
+
+        if phase == 2:
+            aperta = sum(in_aperte.values())
+            u += pesi["aperta"] * aperta
+            minaccia, peggiore = 0.0, None
+            # Se il nemico non puo' piu' metterlo in nessuna delle sue corsie
+            # (le ha gia' coperte tutte), non minaccia nessun nostro pick: la
+            # corsia "principale" di ripiego qui sotto serve solo a mostrarlo.
+            for p in ours if in_aperte else ():
+                lp = corsie_nostre.get(p)
+                if lp == lstar or (lp and {lp, lstar} == {"bottom", "support"}):
+                    adv = sq.advantage(x, lstar, p, lp) if sq else None
+                    if adv is None:
+                        continue
+                    w = 1.0 if lp == lstar else 0.5
+                    minaccia += w * adv
+                    if adv > 0 and (peggiore is None or adv > peggiore[1]):
+                        peggiore = (p, adv)
+            u += pesi["minaccia"] * minaccia
+            if peggiore and peggiore[1] >= 0.3:
+                motivi.append((pesi["minaccia"] * peggiore[1], f"forte contro {peggiore[0]} (+{peggiore[1]:.1f}% soloQ)"))
+
+            sin = 0.0
+            for e in enemies if in_aperte else ():
+                le = corsie_nemiche.get(e)
+                d = None
+                if sq and lstar == "support" and le == "bottom":
+                    d = sq.duo_synergy(x, e)
+                elif sq and lstar == "bottom" and le == "support":
+                    d = sq.duo_synergy(e, x)
+                if d:
+                    sin += d
+                    if d >= 0.3:
+                        motivi.append((pesi["sin_nem"] * d, f"in coppia con {e} (+{d:.1f}% soloQ)"))
+            u += pesi["sin_nem"] * sin
+
+            risposte = sum(counter.get(x, {}).get(p, 0) for p in ours)
+            u += pesi["procnt"] * log(1 + risposte)
+            if risposte >= 5:
+                motivi.append((pesi["procnt"] * log(1 + risposte), f"i pro lo usano contro i vostri pick ({risposte} volte)"))
+
+        # Minaccia ai campioni che vogliamo ancora prendere (tier list/op.gg
+        # nostro): vale in entrambe le fasi, e in prima fase e' l'unica
+        # ragione "nostra" per un ban.
+        piano = 0.0
+        peggiore_piano = None
+        if sq:
+            for lane, comfort in piani.items():
+                if lane not in giocate or lane not in aperte_nemico or not comfort:
+                    continue
+                tot_a = sum(a for _, a in comfort)
+                somma = 0.0
+                for c, a in comfort:
+                    adv = sq.advantage(x, lane, c, lane)
+                    if adv is None:
+                        continue
+                    somma += a * adv
+                    if adv > 0 and (peggiore_piano is None or a * adv > peggiore_piano[1]):
+                        peggiore_piano = (c, a * adv, adv)
+                piano += giocate[lane] * somma / tot_a
+        u += BAN_WEIGHTS[2]["minaccia"] * piano
+        if peggiore_piano and peggiore_piano[2] >= 0.5:
+            motivi.append((BAN_WEIGHTS[2]["minaccia"] * peggiore_piano[1],
+                           f"counter di {peggiore_piano[0]}, che volete giocare (+{peggiore_piano[2]:.1f}%)"))
+
+        # Non si banna quello che vogliamo prendere noi.
+        aff_nostra = _profile_affinity(x, our_profile, ours, champs_by_name) if our_profile else 0.0
+        if aff_nostra > 0:
+            u += log(1 - BAN_OUR_COMFORT_DAMP * min(aff_nostra, 1.0))
+
+        if aff_nemica is not None and aff_nemica >= 0.3:
+            motivi.append((log(aff_nemica) + 2, f"lo giocano ({round(aff_nemica * 100)}%)"))
+        if forza >= 1.5:
+            motivi.append((pesi["forza"] * forza + 0.5, f"forte in soloQ ({forza:+.1f}% winrate)"))
+        if presenze.get(x, 0) >= 30:
+            motivi.append((0.1 * pop, f"meta pro: {presenze[x]} pick+ban"))
+
+        candidati.append((u, x, lstar, motivi))
+
+    candidati.sort(key=lambda t: t[0], reverse=True)
+    return [
+        {
+            "champion": x,
+            "role": soloq.LANE_TO_ROLE.get(lstar),
+            "score": round(u, 2),
+            "reasons": [m for _, m in sorted(motivi, key=lambda t: -t[0])[:3]],
+        }
+        for u, x, lstar, motivi in candidati[:top_n]
+    ]
+
+
+def rank_ban_suggestions(
+    blue_picks: list[str],
+    red_picks: list[str],
+    blue_bans: list[str],
+    red_bans: list[str],
+    taken: set[str],
+    blue_profile: dict | None = None,
+    red_profile: dict | None = None,
+    top_n: int = BAN_SUGGESTIONS,
+    all_champs: list | None = None,
+) -> dict:
+    """"Ban suggeriti" per i due lati: {"blue": {...}, "red": {...}}.
+
+    Stessa impostazione dei pick suggeriti: ragiona per LATI, e ogni lato usa
+    il profilo della propria squadra (le tier list o l'op.gg) e quello della
+    squadra di fronte. Per un lato: {"bans": [...], "phase": 1|2}, oppure
+    elenco vuoto se quel lato ha gia' fatto tutti e cinque i ban.
+
+    La fase e' quella del PROSSIMO ban del lato: i primi tre cadono prima di
+    qualunque pick, il quarto e il quinto dopo tre pick per squadra (vedi
+    DRAFT_SEQUENCE). Si conta sui ban gia' fatti di quel lato e non sul passo
+    della draft perche' in modalita' libera gli slot si riempiono nell'ordine
+    che vuole il coach.
+
+    Funziona anche senza dati soloQ (restano meta pro, corsie aperte dai ruoli
+    pro e risposte pro), solo molto piu' povero.
+
+    `all_champs` si puo' passare da fuori: load_champions() rilegge l'xlsx ad
+    ogni chiamata (~0.13 s), e chi chiede pick e ban insieme lo leggerebbe due
+    volte per lo stesso aggiornamento.
+    """
+    all_champs = all_champs if all_champs is not None else load_champions()
+    champs_by_name = {c.name: c for c in all_champs}
+    tables = leaguepedia.load_tables()
+    sq = soloq.load()
+
+    def side(ours, enemies, bans, our_profile, enemy_profile):
+        fatti = len([b for b in bans if b])
+        if fatti >= 5:
+            return {"bans": [], "phase": None}
+        fase = 1 if fatti < 3 else 2
+        return {
+            "bans": _rank_bans_one_side(
+                ours, enemies, fase, taken, all_champs, champs_by_name, tables, sq,
+                our_profile, enemy_profile, top_n,
+            ),
+            "phase": fase,
+        }
+
+    return {
+        "blue": side(blue_picks, red_picks, blue_bans, blue_profile, red_profile),
+        "red": side(red_picks, blue_picks, red_bans, red_profile, blue_profile),
     }
 
 

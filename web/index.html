@@ -200,7 +200,7 @@
              mostra solo campioni che quel lato gioca davvero. -->
         <button type="button" id="pool-filter" class="toggle-chip hidden" title="Restringi i suggerimenti di ogni lato ai soli campioni presenti nella pool op.gg caricata per quel lato">Solo pool op.gg</button>
         <span id="suggestions-data-info"></span>
-        <button type="button" id="suggestions-sync" title="Riscarica le draft pro recenti da Leaguepedia: sono i dati su cui si basano sinergia, counter e corsia suggerita">Aggiorna dati</button>
+        <button type="button" id="suggestions-sync" title="Riscarica le draft pro recenti da Leaguepedia e i dati soloQ (Emerald+, 30 giorni) da lolalytics: sono i dati su cui si basano sinergia, counter, ban e corsia suggerita">Aggiorna dati</button>
       </div>
       <!-- Una riga per LATO (2026-09-06). Erano "Per noi" e "Per loro", ma
            fuori da torneo/training il tool il lato nostro lo INDOVINAVA
@@ -219,6 +219,18 @@
       <div class="suggestions-row" id="suggestions-row-red">
         <span class="suggestions-row-label" title="I campioni che conviene prendere al RED SIDE: sinergia con i pick rossi, counter contro quelli blu">Red Side</span>
         <div class="suggestions-row-list" id="suggestions-red-list"></div>
+      </div>
+      <!-- Ban suggeriti (2026-09-23), stesse due righe per lato. Pesi tarati
+           sui ban pro (vedi rank_ban_suggestions in training_bot.py), piu'
+           op.gg/tier list quando ci sono. Una riga sparisce quando quel lato
+           ha fatto tutti e cinque i ban. -->
+      <div class="suggestions-row suggestions-row-ban hidden" id="suggestions-row-ban-blue">
+        <span class="suggestions-row-label" title="I campioni che conviene BANNARE al Blue Side: meta, cosa gioca la squadra rossa, cosa minaccia i pick e le tier list blu. Il perché di ciascuno è nel suo tooltip">Ban Blue Side</span>
+        <div class="suggestions-row-list" id="suggestions-ban-blue-list"></div>
+      </div>
+      <div class="suggestions-row suggestions-row-ban hidden" id="suggestions-row-ban-red">
+        <span class="suggestions-row-label" title="I campioni che conviene BANNARE al Red Side: meta, cosa gioca la squadra blu, cosa minaccia i pick e le tier list rosse. Il perché di ciascuno è nel suo tooltip">Ban Red Side</span>
+        <div class="suggestions-row-list" id="suggestions-ban-red-list"></div>
       </div>
     </div>
 
