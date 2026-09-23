@@ -2958,8 +2958,15 @@ function openCounterPopover(slot, popover) {
     popover.style.bottom = `${window.innerHeight - rect.top + 4}px`;
     popover.style.top = "auto";
   }
-  popover.style.right = `${window.innerWidth - rect.right}px`;
-  popover.style.left = "auto";
+  // Si apre dal lato del bottone: a destra sul Blue Side, a sinistra sul
+  // Red Side, dove il bottone sta nell'angolo sinistro (specchio, 2026-09-23).
+  if (slot.closest("#team-slots-2")) {
+    popover.style.left = `${rect.left}px`;
+    popover.style.right = "auto";
+  } else {
+    popover.style.right = `${window.innerWidth - rect.right}px`;
+    popover.style.left = "auto";
+  }
 }
 
 // Il bottone "Modalita' training" ora implementa DAVVERO la feature 4

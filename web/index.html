@@ -168,6 +168,9 @@
     </div>
     <div id="toolbar">
       <input id="search" type="text" placeholder="Cerca campione...">
+      <!-- Solo la X, accanto alla ricerca (2026-09-23): era "✕ Annulla tag" in
+           fondo alla toolbar. Stessa X dei due pannelli op.gg. -->
+      <button id="reset-filters" aria-label="Annulla tutti i filtri" title="Annulla tutti i filtri attivi (ricerca, comp, tag, ruolo, pool, giocatore, counter)">✕</button>
       <div id="role-filters"></div>
       <div id="counter-mode-controls">
         <!-- Chip acceso/spento invece dell'interruttore mobile che c'era
@@ -178,7 +181,6 @@
              questa toolbar. -->
         <button type="button" id="lane-counter-toggle" class="toggle-chip" title="Usa i counter di corsia (differenza oro a 15 minuti, da u.gg) invece del winrate generale (lolalytics)">Counter corsia</button>
       </div>
-      <button id="reset-filters" title="Annulla tutti i filtri attivi (ricerca, comp, tag, ruolo, pool, giocatore, counter)">✕ Annulla tag</button>
     </div>
     <div id="champion-grid"></div>
 
@@ -280,11 +282,13 @@
         <h2>Red Side</h2>
       </div>
       <div class="panel-body">
+        <!-- Specchio del Blue Side (2026-09-23), come slot, ban e titolo: da
+             fuori verso dentro X, scambio, ricarica, e il campo per ultimo. -->
         <div class="pool-import">
-          <input type="text" id="pool-url-right" placeholder="Link op.gg multisearch...">
-          <button type="button" id="pool-refresh-right" title="Carica la pool di questo op.gg">🔄</button>
-          <button type="button" id="pool-swap-right" title="Scambia gli op.gg di Blue Side e Red Side">⇄</button>
           <button type="button" id="pool-clear-right" title="Cancella l'op.gg di questo lato">✕</button>
+          <button type="button" id="pool-swap-right" title="Scambia gli op.gg di Blue Side e Red Side">⇄</button>
+          <button type="button" id="pool-refresh-right" title="Carica la pool di questo op.gg">🔄</button>
+          <input type="text" id="pool-url-right" placeholder="Link op.gg multisearch...">
         </div>
         <div id="pool-chip-right"></div>
         <div id="team-slots-2"></div>
