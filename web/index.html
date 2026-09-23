@@ -577,9 +577,40 @@
           </div>
         </div>
         <label class="settings-row">
-          <span class="settings-name">Pick e ban suggeriti</span>
+          <span class="settings-name">Pick e ban suggeriti
+            <span class="settings-note">Si vedono i pick o i ban, secondo la fase della draft</span>
+          </span>
           <span class="toggle-switch">
             <input type="checkbox" id="suggestions-toggle">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </span>
+        </label>
+        <!-- Tre eccezioni alla regola "si vede solo la fase in corso"
+             (2026-09-23): spente, pick e ban si alternano da soli. -->
+        <label class="settings-row suggestion-option">
+          <span class="settings-name">Mostra sempre i pick suggeriti
+            <span class="settings-note">Anche mentre si banna</span>
+          </span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="suggest-always-picks">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </span>
+        </label>
+        <label class="settings-row suggestion-option">
+          <span class="settings-name">Mostra sempre i ban suggeriti
+            <span class="settings-note">Anche mentre si sceglie</span>
+          </span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="suggest-always-bans">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </span>
+        </label>
+        <label class="settings-row suggestion-option">
+          <span class="settings-name">Suggerimenti del team avversario
+            <span class="settings-note">Serve sapere il tuo lato: torneo, training o "Lato del tuo team"</span>
+          </span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="suggest-opponent" checked>
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </span>
         </label>

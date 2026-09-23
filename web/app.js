@@ -630,6 +630,60 @@ let redNames = new Set();
 // Arrivano nella stessa risposta dei pick suggeriti, vedi rank_ban_suggestions.
 let blueBanSuggestions = [];
 let redBanSuggestions = [];
+let blueBanNames = new Set();
+let redBanNames = new Set();
+
+// --- Pick O ban, secondo la fase (2026-09-23) ---
+// Richiesta dell'utente: pick e ban suggeriti insieme occupavano troppo
+// spazio, e mostrare quelli della fase in corso "e' anche piu' logico". La
+// fase decide anche cosa si ILLUMINA in griglia e nel pannello: in fase di ban
+// gli aloni sono dei ban e quelli dei pick spariscono, per tornare coi pick.
+// Le tre eccezioni stanno nelle Impostazioni (mostra sempre i pick, mostra
+// sempre i ban, suggerimenti del team avversario) e toccano solo le RIGHE
+// del pannello: l'alone segue sempre e solo la fase.
+let suggestAlwaysPicks = localStorage.getItem("suggestAlwaysPicks") === "true";
+let suggestAlwaysBans = localStorage.getItem("suggestAlwaysBans") === "true";
+let suggestOpponent = localStorage.getItem("suggestOpponent") !== "false";
+
+// "pick" o "ban": cosa si sta facendo ORA nella draft. In torneo e in
+// allenamento lo dice la draft stessa; in modalita' normale la casella
+// selezionata. Senza casella selezionata (a draft appena aperta, o dopo aver
+// riempito l'ultima di una fila) si segue l'ordine di una draft vera: 6 ban,
+// 6 pick, 4 ban, 4 pick.
+function draftPhase() {
+  if (tournamentConnected) {
+    const fase = parseTournamentPhase(tournamentLastStep);
+    if (fase) return fase.kind;
+  } else if (trainingConnected) {
+    const azione = trainingState && trainingState.currentAction;
+    if (azione && azione.kind) return azione.kind;
+  } else if (activeSlot) {
+    return activeSlot.kind;
+  }
+  const ban = allBannedNames().length;
+  const pick = allPickedNames().length;
+  if (pick < 6) return ban < 6 ? "ban" : "pick";
+  return ban < 10 ? "ban" : "pick";
+}
+
+// Il lato del coach: in torneo quello connesso davvero, in allenamento quello
+// del trainee, in modalita' normale quello scelto nelle Impostazioni. null se
+// non si sa: allora non esiste un lato "avversario" da nascondere.
+function ourDraftSide() {
+  if (tournamentConnected) return tournamentSide || null;
+  if (trainingConnected) return (trainingState && trainingState.traineeSide) || null;
+  return contextTeamSide || null;
+}
+
+// Una riga di suggerimenti (kind "pick"/"ban", side "blue"/"red") va a vista?
+function suggestionRowVisible(kind, side) {
+  if (kind !== draftPhase() && !(kind === "pick" ? suggestAlwaysPicks : suggestAlwaysBans)) return false;
+  if (!suggestOpponent) {
+    const nostro = ourDraftSide();
+    if (nostro && side !== nostro) return false;
+  }
+  return true;
+}
 // Numero di sequenza incrementato ad ogni fetch avviato: una risposta che
 // arriva quando non e' piu' la piu' recente (es. due fetch quasi
 // consecutivi per due cambi di stato ravvicinati, la prima risponde DOPO la
@@ -4450,8 +4504,27 @@ function setupSuggestionsToggle() {
   suggestionsToggle.addEventListener("change", () => {
     suggestionsEnabled = suggestionsToggle.checked;
     localStorage.setItem("suggestionsEnabled", suggestionsEnabled);
+    applySuggestionOptionsState();
     refreshSuggestions();
   });
+
+  // Le tre eccezioni alla regola "si vede solo la fase in corso". Non serve
+  // chiedere di nuovo niente al server: cambia solo cosa si mostra.
+  for (const [id, chiave, leggi, scrivi] of [
+    ["suggest-always-picks", "suggestAlwaysPicks", () => suggestAlwaysPicks, (v) => (suggestAlwaysPicks = v)],
+    ["suggest-always-bans", "suggestAlwaysBans", () => suggestAlwaysBans, (v) => (suggestAlwaysBans = v)],
+    ["suggest-opponent", "suggestOpponent", () => suggestOpponent, (v) => (suggestOpponent = v)],
+  ]) {
+    const box = document.getElementById(id);
+    box.checked = leggi();
+    box.addEventListener("change", () => {
+      scrivi(box.checked);
+      localStorage.setItem(chiave, box.checked);
+      renderGrid();
+      renderSuggestionsPanel();
+    });
+  }
+  applySuggestionOptionsState();
   document.getElementById("pool-filter").addEventListener("click", () => {
     poolFilterEnabled = !poolFilterEnabled;
     localStorage.setItem("poolFilterEnabled", poolFilterEnabled);
@@ -5216,9 +5289,21 @@ async function startDataSync() {
 // di suggerimenti. E' l'unico posto in cui si decide "conteso": ovunque
 // serva la classe CSS (griglia e card del pannello) si passa di qui, cosi'
 // griglia e pannello non possono divergere.
-function suggestionState(name) {
-  const blu = blueNames.has(name);
-  const rosso = redNames.has(name);
+//
+// Dal 2026-09-23 dipende dalla FASE: si illuminano i suggerimenti della fase
+// in corso (vedi draftPhase), e una card di pick in fase di ban - o il
+// contrario - resta senza alone. Col team avversario nascosto un campione
+// suggerito SOLO a lui non si illumina; uno suggerito a entrambi resta
+// conteso, perche' quello dice qualcosa anche sul nostro lato.
+function suggestionState(name, kind = draftPhase()) {
+  if (kind !== draftPhase()) return "";
+  let blu = (kind === "ban" ? blueBanNames : blueNames).has(name);
+  let rosso = (kind === "ban" ? redBanNames : redNames).has(name);
+  if (!suggestOpponent && !(blu && rosso)) {
+    const nostro = ourDraftSide();
+    if (nostro === "blue") rosso = false;
+    if (nostro === "red") blu = false;
+  }
   if (blu && rosso) return "suggest-contested";
   if (blu) return "suggest-blue";
   if (rosso) return "suggest-red";
@@ -5229,7 +5314,8 @@ function suggestionState(name) {
 // mostra ENTRAMBI i punteggi: sono due letture diverse degli stessi dati
 // (quanto conviene a noi / quanto a loro) e possono essere molto diverse fra
 // loro - il fatto che sia conteso non dice ancora chi lo vuole di piu'.
-function suggestionTitle(name) {
+function suggestionTitle(name, kind = draftPhase()) {
+  if (kind === "ban") return banSuggestionTitle(name);
   const blu = blueSuggestions.find((s) => s.champion === name);
   const rosso = redSuggestions.find((s) => s.champion === name);
   const lane = (blu || rosso).role;
@@ -5271,9 +5357,9 @@ function buildSuggestionCard(entry, title = null) {
   if (!champ) return null;
 
   const card = document.createElement("div");
-  const state = title ? "" : suggestionState(entry.champion);
+  const state = title ? "" : suggestionState(entry.champion, "pick");
   card.className = "suggestion-card" + (state ? " " + state : "");
-  card.title = title || suggestionTitle(entry.champion);
+  card.title = title || suggestionTitle(entry.champion, "pick");
   // Cliccabile e trascinabile esattamente come una card della griglia:
   // stesso placeChampion, quindi in torneo un click qui e' un'azione VERA
   // sulla draft, come lo e' in griglia. Nessuna scorciatoia diversa. Vale
@@ -5328,6 +5414,21 @@ function buildSuggestionCard(entry, title = null) {
   return card;
 }
 
+// Il tooltip di un ban suggerito, in griglia (fase di ban). Nel pannello ogni
+// card ha gia' il suo, per lato (vedi buildBanCard).
+function banSuggestionTitle(name) {
+  const blu = blueBanSuggestions.find((s) => s.champion === name);
+  const rosso = redBanSuggestions.find((s) => s.champion === name);
+  const motivi = (s) => ((s && s.reasons) || []).join("; ");
+  if (blu && rosso) {
+    return `${name} — da bannare per ENTRAMBI: Blue Side (${motivi(blu) || "suggerito"}), Red Side (${motivi(rosso) || "suggerito"})`;
+  }
+  const s = blu || rosso;
+  if (!s) return name;
+  const lato = blu ? "Blue Side" : "Red Side";
+  return `${name}${s.role ? ` (${s.role})` : ""} — ban suggerito al ${lato}${motivi(s) ? ": " + motivi(s) : ""}`;
+}
+
 // Card di un ban suggerito: stessa struttura di quella di un pick (corsia +
 // icona, stesso click e trascinamento), senza la cornice blu/rossa, che nelle
 // righe dei pick vuol dire "buono per quel lato". Il tooltip dice PERCHE':
@@ -5338,7 +5439,11 @@ function buildBanCard(entry, side) {
   const motivi = (entry.reasons || []).join("; ");
   const title = `${entry.champion}${where} — ban suggerito al ${lato}${motivi ? ": " + motivi : ""}`;
   const card = buildSuggestionCard({ champion: entry.champion, role: entry.role }, title);
-  if (card) card.classList.add("ban-suggestion");
+  if (!card) return null;
+  card.classList.add("ban-suggestion");
+  // In fase di ban si illumina come un pick in fase di pick (2026-09-23).
+  const state = suggestionState(entry.champion, "ban");
+  if (state) card.classList.add(state);
   return card;
 }
 
@@ -5346,7 +5451,7 @@ function fillBanRow(side, entries) {
   const row = document.getElementById(`suggestions-row-ban-${side}`);
   const list = row.querySelector(".suggestions-row-list");
   list.innerHTML = "";
-  const show = suggestionsEnabled && entries.length > 0;
+  const show = suggestionsEnabled && entries.length > 0 && suggestionRowVisible("ban", side);
   row.classList.toggle("hidden", !show);
   if (!show) return;
   for (const entry of entries) {
@@ -5371,7 +5476,7 @@ function fillSuggestionsRow(side, entries, pickCount, thin) {
   // Python). Dirlo e' meglio che sparire - una riga che scompare sembra un
   // guasto, e mostrare comunque otto card costruite su una partita sarebbe
   // peggio ancora: sembrerebbe un consiglio.
-  const attivo = suggestionsEnabled && pickCount < 5;
+  const attivo = suggestionsEnabled && pickCount < 5 && suggestionRowVisible("pick", side);
   const show = attivo && (entries.length > 0 || thin);
   row.classList.toggle("hidden", !show);
   if (!show) return;
@@ -5425,6 +5530,15 @@ function teamPlayers(side) {
   return players && players.length ? players : null;
 }
 
+// Con i suggerimenti spenti le tre opzioni non hanno niente su cui agire:
+// restano leggibili ma spente, come i counter naturali senza comp.
+function applySuggestionOptionsState() {
+  document.querySelectorAll(".suggestion-option").forEach((row) => {
+    row.classList.toggle("settings-off", !suggestionsEnabled);
+    row.querySelector("input").disabled = !suggestionsEnabled;
+  });
+}
+
 function renderSuggestionsPanel() {
   // Ridisegnato anche qui e non solo al cambio team: entrando in allenamento
   // o in torneo il lato lo sa l'app e il promemoria deve sparire da solo.
@@ -5475,6 +5589,8 @@ async function _doRefreshSuggestions() {
     }
     blueBanSuggestions = [];
     redBanSuggestions = [];
+    blueBanNames = new Set();
+    redBanNames = new Set();
     blueThin = false;
     redThin = false;
     renderSuggestionsPanel();
@@ -5488,11 +5604,7 @@ async function _doRefreshSuggestions() {
   // quello del trainee. Fuori da queste due non esiste un lato "nostro" e le
   // tier list restano fuori - dedurlo dall'ultimo slot cliccato e' gia' stato
   // un bug, vedi il passaggio dei pick suggeriti a blu/rosso.
-  const ourSide = tournamentConnected
-    ? tournamentSide
-    : trainingConnected
-      ? trainingState && trainingState.traineeSide
-      : contextTeamSide;
+  const ourSide = ourDraftSide();
   const ourTeam = ourSide && contextTeamName ? contextTeamName : null;
   if (tournamentConnected) {
     result = await backend.liveDraftSuggestions(
@@ -5531,6 +5643,8 @@ async function _doRefreshSuggestions() {
   redThin = ok && !!result.red?.thin;
   blueBanSuggestions = ok ? result.bans?.blue?.bans || [] : [];
   redBanSuggestions = ok ? result.bans?.red?.bans || [] : [];
+  blueBanNames = new Set(blueBanSuggestions.map((s) => s.champion));
+  redBanNames = new Set(redBanSuggestions.map((s) => s.champion));
   blueNames = new Set(blueSuggestions.map((s) => s.champion));
   redNames = new Set(redSuggestions.map((s) => s.champion));
   renderGrid();
