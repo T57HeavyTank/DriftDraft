@@ -14,6 +14,18 @@ verificato navigando il sito), che persone vere stanno guardando. Va
 sempre testato su una draft di prova, mai la prima volta su uno
 scrim/torneo vero.
 
+AGGIORNAMENTO DEL SITO (rilevato il 2026-10-16, segnalato dall'utente:
+"ha aggiornato il sito, rompendo completamente tutte le funzioni"). Studiato
+da capo su draft di prova create apposta, giocando entrambi i lati in due
+schede. Cambiato: il dialogo di ingresso (rifatto da zero, vedi
+_JOIN_OPTIONS_JS), il percorso delle immagini dei campioni
+(/game/champions/<id>.png invece di champion-icons/<id>.png: da li' si
+selezionano i campioni e si leggono i ban) e quello degli splash nella
+conferma ruoli (/game/splashes/<nome>.jpg). Rimasto uguale tutto il resto:
+gli ID qui sotto, il segnale "pulse-animation" di una scelta in sospeso, il
+trascinamento dei ruoli, i badge dei ruoli confermati, gli ID del pannello
+fearless, i popup noti. La fase ora si legge "Blue ban" senza numero.
+
 Struttura pagina verificata navigando manualmente una draft reale (ID
 stabili nel DOM, non e' stato necessario indovinare selettori CSS
 generati): #step-name (fase corrente), #timer (secondi rimanenti),
@@ -206,7 +218,14 @@ def _resolve_role_confirm_slug(slug: str | None) -> str | None:
         _champion_name_by_cdragon_slug = {
             slugify_champion_name(c.name): c.name for c in load_champions()
         }
-    return _champion_name_by_cdragon_slug.get(slug)
+    nome = _champion_name_by_cdragon_slug.get(slug)
+    if nome:
+        return nome
+    # Gli splash nuovi (2026-10-16) sono per alias Data Dragon: per i pochi
+    # che non sono il nome senza punteggiatura (monkeyking = Wukong, nunu,
+    # renata) ripiega sulla stessa tabella del pannello fearless.
+    nome = _resolve_fearless_alias(slug)
+    return nome if nome in _champion_name_by_cdragon_slug.values() else None
 
 
 _USER_AGENT = (
@@ -383,68 +402,58 @@ _HIDE_SITE_NAV_JS = """
 }
 """
 
-# Legge il dialogo "Join the Draft" (la schermata che drafter.lol mostra
-# appena si apre il link) SENZA cliccare nulla: quali team esistono in questa
-# room e quali lati sono ancora liberi. Serve alla connessione in due tempi
-# introdotta 2026-09-05 su richiesta dell'utente - prima il nome del team
-# andava digitato a mano ad ogni connessione, ora si incolla solo il link e
-# si sceglie da un elenco vero.
+# Legge il dialogo di ingresso (la schermata che drafter.lol mostra appena
+# si apre il link) SENZA cliccare nulla: quali team esistono in questa room e
+# quali lati sono ancora liberi. Serve alla connessione in due tempi
+# (2026-09-05, richiesta dell'utente): si incolla solo il link e si sceglie
+# team e lato da un elenco vero invece di digitare il nome a memoria.
 #
-# Struttura verificata dal vivo su una draft room di prova (2026-09-05):
+# Struttura RIFATTA dal sito, verificata dal vivo il 2026-10-16 su draft di
+# prova ("Join the draft"):
 #
-#   <section>
-#     <div><label>Team Selection</label></div>
-#     <div class="grid..."><button>NomeTeam1</button><button>NomeTeam2</button></div>
-#     <button>Clear Team Selection</button>
-#   </section>
-#   <section>
-#     <div><label>Role Selection</label><span>Not selected</span></div>
-#     <button>Blue Side ...</button><button>Red Side ...</button>
-#     <button>Continue as Spectator</button>
-#   </section>
+#   <div role="radiogroup" aria-label="Your team">
+#     <button role="radio" aria-checked="true|false" data-join-row>
+#       <span data-row-title>NomeTeam</span>
+#       <span data-row-subtitle>Drafter seat open | Drafter seat taken</span>
+#     </button> ...
+#   </div>
+#   <h3>Your side</h3>
+#   <button disabled? aria-pressed>Blue drafter <span>Pick a team first |
+#     Open | Taken by opponent</span></button>  (idem "Red drafter")
+#   <button data-join-row>Spectate ...</button>
 #
-# Ci si aggancia alle <label> di testo ("Team Selection"/"Role Selection") e
-# si risale al primo antenato che contiene almeno 2 bottoni - NON alle classi
-# CSS, che sono Tailwind generate e cambiano senza preavviso.
+# Si entra cliccando il team e poi il lato: nessun bottone di conferma.
+# Prima c'erano due <section> con le etichette "Team Selection"/"Role
+# Selection" e i lati si chiamavano "Blue Side"/"Red Side": cercando quelle
+# etichette la connessione falliva subito con "Dialogo di ingresso non
+# trovato", ed e' da li' che si rompeva tutta la modalita' torneo.
 #
-# Significato di `disabled`, misurato sul sito (non dedotto):
-#  - su un bottone TEAM  -> e' il team attualmente selezionato da noi;
-#  - su un bottone LATO  -> quel lato NON e' disponibile, o perche' non
-#    abbiamo ancora scelto un team, o perche' l'ha gia' preso qualcun altro.
-# Verificato anche il caso incrociato: scegliendo lo stesso team di chi ha
-# gia' preso blue, ENTRAMBI i lati risultano disabled (il sito lega team e
-# lato) - quindi non serve nessuna euristica nostra, basta leggere il flag.
+# Ci si aggancia ad attributi di accessibilita' e dati (role, aria-label,
+# data-row-title) e al testo dei lati, MAI alle classi CSS, che sono Tailwind
+# generate e cambiano senza preavviso. Il significato dei flag:
+#  - team: aria-checked = e' quello scelto da noi; "seat taken" nel
+#    sottotitolo = un altro drafter siede gia' per quel team;
+#  - lato: disabled = non disponibile, o perche' non abbiamo ancora scelto un
+#    team, o perche' l'ha gia' preso qualcun altro (verificato: dopo l'ingresso
+#    del blu, dall'altra scheda il lato blu risulta "Taken by opponent").
 _JOIN_OPTIONS_JS = r"""
 () => {
-  const sezione = (nome) => {
-    const lbl = [...document.querySelectorAll("label")].find(
-      (e) => e.textContent.trim().toLowerCase() === nome
-    );
-    if (!lbl) return null;
-    let n = lbl.parentElement;
-    for (let i = 0; i < 5 && n; i++) {
-      if (n.querySelectorAll("button").length >= 2) return n;
-      n = n.parentElement;
-    }
-    return null;
+  const gruppo = document.querySelector('[role="radiogroup"][aria-label="Your team"]');
+  if (!gruppo) return { present: false };
+
+  const testo = (el, sel) => {
+    const x = el.querySelector(sel);
+    return (x ? x.textContent : "").trim();
   };
+  const teams = [...gruppo.querySelectorAll('[role="radio"]')].map((b) => ({
+    name: testo(b, "[data-row-title]") || b.textContent.trim(),
+    selected: b.getAttribute("aria-checked") === "true",
+    taken: /taken/i.test(testo(b, "[data-row-subtitle]")),
+  }));
 
-  const teamSec = sezione("team selection");
-  const roleSec = sezione("role selection");
-  if (!teamSec || !roleSec) return { present: false };
-
-  const teams = [...teamSec.querySelectorAll("button")]
-    .filter((b) => !/clear team selection/i.test(b.textContent))
-    .map((b) => ({
-      name: b.textContent.trim(),
-      // vedi commento Python: disabled su un team = e' quello scelto da noi
-      selected: b.disabled,
-    }));
-
-  const sideBtns = [...roleSec.querySelectorAll("button")];
-  const findSide = (re) => sideBtns.find((b) => re.test(b.textContent));
-  const blue = findSide(/blue\s*side/i);
-  const red = findSide(/red\s*side/i);
+  const lato = (re) => [...document.querySelectorAll("button")].find((b) => re.test(b.textContent));
+  const blue = lato(/blue\s*drafter/i);
+  const red = lato(/red\s*drafter/i);
 
   return {
     present: true,
@@ -458,48 +467,31 @@ _JOIN_OPTIONS_JS = r"""
 """
 
 
-# Clicca un bottone del dialogo di join (team o lato). Volutamente JS e non
-# un selettore Playwright: i selettori con :has()/:text-is() su questa
-# struttura fallivano in silenzio (provato dal vivo 2026-09-05 - il click non
-# avveniva, i lati restavano tutti "occupati" e l'errore veniva ingoiato da
-# un try/except). Qui invece si riusa esattamente la stessa funzione
-# `sezione()` di _JOIN_OPTIONS_JS, che sappiamo trovare i contenitori giusti,
-# e si restituisce un esito ESPLICITO: chi chiama sa se il click e' avvenuto.
+# Clicca un team o un lato del dialogo di ingresso. JS e non un selettore
+# Playwright: con i selettori :has()/:text-is() i click fallivano in silenzio
+# (provato dal vivo 2026-09-05). Restituisce un esito ESPLICITO, cosi' chi
+# chiama sa se il click e' avvenuto. `section` e' "team" (match esatto sul
+# nome) o "side" (`text` e' una regex sul testo del bottone del lato).
+# `alreadyDisabled`: per un team vuol dire "gia' scelto" (va bene), per un
+# lato "non disponibile" - distinguerlo tocca al chiamante.
 _JOIN_CLICK_JS = r"""
-({ section, text, exact }) => {
-  const sezione = (nome) => {
-    const lbl = [...document.querySelectorAll("label")].find(
-      (e) => e.textContent.trim().toLowerCase() === nome
-    );
-    if (!lbl) return null;
-    let n = lbl.parentElement;
-    for (let i = 0; i < 5 && n; i++) {
-      if (n.querySelectorAll("button").length >= 2) return n;
-      n = n.parentElement;
-    }
-    return null;
-  };
-
-  const sec = sezione(section);
-  if (!sec) return { ok: false, reason: "sezione non trovata" };
-
-  const btns = [...sec.querySelectorAll("button")];
-  const wanted = exact
-    ? btns.find((b) => b.textContent.trim() === text)
-    : btns.find((b) => new RegExp(text, "i").test(b.textContent));
-
-  if (!wanted) {
-    return {
-      ok: false,
-      reason: "bottone non trovato",
-      disponibili: btns.map((b) => b.textContent.trim()),
-    };
+({ section, text }) => {
+  if (section === "team") {
+    const gruppo = document.querySelector('[role="radiogroup"][aria-label="Your team"]');
+    if (!gruppo) return { ok: false, reason: "dialogo di ingresso non trovato" };
+    const nome = (b) => ((b.querySelector("[data-row-title]") || b).textContent || "").trim();
+    const btns = [...gruppo.querySelectorAll('[role="radio"]')];
+    const wanted = btns.find((b) => nome(b) === text);
+    if (!wanted) return { ok: false, reason: "team non trovato", disponibili: btns.map(nome) };
+    if (wanted.getAttribute("aria-checked") === "true") return { ok: true, alreadyDisabled: true };
+    wanted.click();
+    return { ok: true, alreadyDisabled: false };
   }
-  if (wanted.disabled) {
-    // Su un TEAM disabled significa "gia' selezionato" (quindi va bene), su
-    // un LATO significa "non disponibile" - distinguerlo tocca al chiamante.
-    return { ok: true, alreadyDisabled: true };
-  }
+
+  const re = new RegExp(text, "i");
+  const wanted = [...document.querySelectorAll("button")].find((b) => re.test(b.textContent));
+  if (!wanted) return { ok: false, reason: "lato non trovato" };
+  if (wanted.disabled) return { ok: true, alreadyDisabled: true };
   wanted.click();
   return { ok: true, alreadyDisabled: false };
 }
@@ -556,7 +548,11 @@ _STATE_JS = r"""
     const img = el.querySelector('img[alt="ban"]');
     if (!img) return null;
     const src = img.currentSrc || img.src || '';
-    const m = src.match(/champion-icons(?:%2F|\/)(-?\d+)\.png/);
+    // Due percorsi: champion-icons/<id>.png fino all'ottobre 2026,
+    // game/champions/<id>.png (dentro il proxy immagini di Next.js, quindi
+    // con %2F al posto di /) dal rifacimento del sito - verificato il
+    // 2026-10-16 su un ban di Ziggs (115).
+    const m = src.match(/(?:champion-icons|champions)(?:%2F|\/)(-?\d+)\.png/);
     return m ? m[1] : null;
   };
   const sideBanIds = (side) => [1, 2, 3, 4, 5].map((i) => banId(`${side}-ban-${i}`));
@@ -772,7 +768,11 @@ _ROLE_CONFIRM_STATE_JS = r"""
     const img = el ? el.querySelector('img[alt="pick"]') : null;
     if (!img) return null;
     const src = img.currentSrc || img.src || '';
-    const m = src.match(/characters(?:%2F|\/)([a-z0-9]+)(?:%2F|\/)skins/);
+    // Due percorsi: characters/<nome>/skins/... fino all'ottobre 2026,
+    // game/splashes/<nome>.jpg dal rifacimento del sito (verificato il
+    // 2026-10-16: "kaisa", "orianna", "thresh"...).
+    const m = src.match(/characters(?:%2F|\/)([a-z0-9]+)(?:%2F|\/)skins/)
+      || src.match(/splashes(?:%2F|\/)([a-z0-9]+)\.jpg/);
     return m ? m[1] : null;
   };
   return ['top', 'jungle', 'mid', 'adc', 'support'].map(slugFor);
@@ -1261,10 +1261,7 @@ class LiveDraftSession:
             if cmd == "join_options":
                 try:
                     if _payload:
-                        clicked = page.evaluate(
-                            _JOIN_CLICK_JS,
-                            {"section": "team selection", "text": _payload, "exact": True},
-                        )
+                        clicked = page.evaluate(_JOIN_CLICK_JS, {"section": "team", "text": _payload})
                         if not clicked.get("ok"):
                             result_queue.put((
                                 "error",
@@ -1289,19 +1286,15 @@ class LiveDraftSession:
                     team = _payload["team"]
                     # Stringa passata a `new RegExp` lato JS, non a Python:
                     # raw string per non far interpretare \s a Python stesso.
-                    side_label = r"Blue\s*Side" if _payload["side"] == "blue" else r"Red\s*Side"
-                    t = page.evaluate(
-                        _JOIN_CLICK_JS,
-                        {"section": "team selection", "text": team, "exact": True},
-                    )
+                    # "Blue drafter"/"Red drafter" dal rifacimento del sito
+                    # (erano "Blue Side"/"Red Side").
+                    side_label = r"Blue\s*drafter" if _payload["side"] == "blue" else r"Red\s*drafter"
+                    t = page.evaluate(_JOIN_CLICK_JS, {"section": "team", "text": team})
                     if not t.get("ok"):
                         result_queue.put(("error", f"Team '{team}' non selezionabile."))
                         continue
                     page.wait_for_timeout(800)
-                    r = page.evaluate(
-                        _JOIN_CLICK_JS,
-                        {"section": "role selection", "text": side_label, "exact": False},
-                    )
+                    r = page.evaluate(_JOIN_CLICK_JS, {"section": "side", "text": side_label})
                     if not r.get("ok"):
                         result_queue.put(("error", "Lato non selezionabile."))
                         continue
@@ -1417,10 +1410,17 @@ class LiveDraftSession:
                     # %2F (slash con URL-encoding, confermato nel DOM reale:
                     # il sito passa l'URL CommunityDragon come query string
                     # del proxy immagini di Next.js) sia / semplice.
+                    # Dal rifacimento del sito (2026-10-16) le icone stanno in
+                    # /game/champions/<id>.png: con il solo vecchio percorso
+                    # nessun campione veniva piu' trovato. Cercati entrambi;
+                    # "champions/<id>.png" non confonde 45 con 145 perche'
+                    # davanti all'ID c'e' sempre lo slash.
                     if champion_id is not None:
                         tile_xpath = (
                             f'xpath=//img[contains(@src, "champion-icons/{champion_id}.png") '
-                            f'or contains(@src, "champion-icons%2F{champion_id}.png")]'
+                            f'or contains(@src, "champion-icons%2F{champion_id}.png") '
+                            f'or contains(@src, "champions/{champion_id}.png") '
+                            f'or contains(@src, "champions%2F{champion_id}.png")]'
                             '/ancestor::div[contains(@class, "cursor-pointer")][1]'
                         )
                     else:
