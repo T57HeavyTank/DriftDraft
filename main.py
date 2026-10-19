@@ -36,7 +36,9 @@ if getattr(sys, "frozen", False):
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = os.path.join(sys._MEIPASS, "ms-playwright")
 
 PORT = 8721
-VERSION = "2.3"
+# La versione sta in driftdraft/version.py (dal 2026-10-19): la legge anche il
+# server, per l'aggiornamento dall'app. Nessun import pesante: si puo' fare qui.
+from driftdraft.version import VERSION  # noqa: E402
 
 
 def main():

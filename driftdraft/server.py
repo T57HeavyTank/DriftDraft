@@ -23,6 +23,7 @@ from driftdraft.data import COMP_COLUMNS, ROLE_COLUMNS, TAG_COLUMNS, load_champi
 from driftdraft.drafter_live import get_session as get_live_draft_session
 from driftdraft import leaguepedia
 from driftdraft import soloq
+from driftdraft import updater
 from driftdraft import training_bot
 from driftdraft.draft_evaluation import EvaluationError, evaluate_live_draft, evaluate_session
 from driftdraft.lolalytics import DEFAULT_TIER, ROLE_TO_LANE, VALID_TIERS, NoCounterDataError, fetch_counters
@@ -1275,6 +1276,38 @@ def api_training_sync_progress():
     stato = leaguepedia.sync_progress()
     stato["soloq"] = soloq.sync_progress()
     return json.dumps(stato, ensure_ascii=False)
+
+
+@app.get("/api/version")
+def api_version():
+    """La versione che sta girando: nessuna richiesta di rete."""
+    response.content_type = "application/json"
+    return json.dumps({"version": updater.VERSION, "canInstall": updater.can_install()})
+
+
+@app.get("/api/update/check")
+def api_update_check():
+    """Confronta la versione installata con l'ultima release su GitHub (vedi
+    updater.py). Una richiesta all'API di GitHub, solo quando l'utente preme
+    "Controlla aggiornamenti": mai in automatico."""
+    response.content_type = "application/json"
+    return json.dumps(updater.check(), ensure_ascii=False)
+
+
+@app.post("/api/update/start")
+def api_update_start():
+    """Scarica, verifica e installa l'ultima versione; l'app si chiude e si
+    riapre da sola. Prima di chiudersi stacca la draft torneo, se c'e': il suo
+    Chromium vive in _internal e terrebbe bloccati file che l'installer deve
+    sostituire."""
+    response.content_type = "application/json"
+    return json.dumps(updater.start(prima_di_uscire=get_live_draft_session().disconnect), ensure_ascii=False)
+
+
+@app.get("/api/update/progress")
+def api_update_progress():
+    response.content_type = "application/json"
+    return json.dumps(updater.progress(), ensure_ascii=False)
 
 
 @app.get("/api/training/teams")

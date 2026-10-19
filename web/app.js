@@ -43,6 +43,10 @@ const backend = window.pywebview
       addSavedDraft: (name, champions) => window.pywebview.api.add_saved_draft(name, champions),
       deleteSavedDraft: (id) => window.pywebview.api.delete_saved_draft(id),
       trainingStatus: () => window.pywebview.api.training_status(),
+      appVersion: () => window.pywebview.api.app_version(),
+      updateCheck: () => window.pywebview.api.update_check(),
+      updateStart: () => window.pywebview.api.update_start(),
+      updateProgress: () => window.pywebview.api.update_progress(),
       trainingSync: () => window.pywebview.api.training_sync(),
       trainingSyncProgress: () => window.pywebview.api.training_sync_progress(),
       trainingStart: (mode, side, enemyTeamUrl, team, series) =>
@@ -202,6 +206,10 @@ const backend = window.pywebview
           body: JSON.stringify({ id }),
         }).then((r) => r.json()),
       trainingStatus: () => fetch("/api/training/status").then((r) => r.json()),
+      appVersion: () => fetch("/api/version").then((r) => r.json()),
+      updateCheck: () => fetch("/api/update/check").then((r) => r.json()),
+      updateStart: () => fetch("/api/update/start", { method: "POST" }).then((r) => r.json()),
+      updateProgress: () => fetch("/api/update/progress").then((r) => r.json()),
       trainingSync: () => fetch("/api/training/sync", { method: "POST" }).then((r) => r.json()),
       trainingSyncProgress: () => fetch("/api/training/sync-progress").then((r) => r.json()),
       trainingTeams: () => fetch("/api/training/teams").then((r) => r.json()),
@@ -2058,6 +2066,7 @@ async function init() {
   setupSidebarSizeSlider();
   setupThemeToggle();
   setupSettingsModal();
+  setupUpdater();
   setupCompBordersToggle();
   setupCounterDiagramToggle();
   setupLaneCounterToggle();
@@ -2133,6 +2142,110 @@ function setupThemeToggle() {
     localStorage.setItem("themeLight", toggle.checked);
     applyTheme(toggle.checked);
   });
+}
+
+// --- Aggiorna DriftDraft (2026-10-19) ---
+// Richiesta dell'utente: aggiornare dalle Impostazioni, "senza aprire
+// browser, github ecc.". Un bottone solo che cambia mestiere:
+// "Controlla aggiornamenti" chiede a GitHub l'ultima versione (vedi
+// driftdraft/updater.py); se ce n'e' una nuova diventa "Aggiornamento
+// disponibile", e premuto scarica, verifica e installa: DriftDraft si chiude e
+// si riapre da solo. Altrimenti dice "ultima versione installata".
+let updateInfo = null; // l'ultima risposta di /api/update/check
+let updatePollTimer = null;
+
+function updateNote(testo) {
+  document.getElementById("update-note").textContent = testo;
+}
+
+async function checkForUpdates() {
+  const btn = document.getElementById("update-button");
+  btn.disabled = true;
+  btn.textContent = "Controllo...";
+  updateNote("Chiedo a GitHub l'ultima versione...");
+  let info;
+  try {
+    info = await backend.updateCheck();
+  } catch (e) {
+    info = { error: "Non riesco a contattare GitHub." };
+  }
+  updateInfo = info;
+  btn.disabled = false;
+  btn.classList.remove("update-ready");
+  btn.textContent = "Controlla aggiornamenti";
+  if (info.error) {
+    updateNote(info.error);
+    return;
+  }
+  if (!info.available) {
+    updateNote(`Ultima versione installata (v${info.current})`);
+    return;
+  }
+  if (!info.canInstall) {
+    // Da sorgente non c'e' un'installazione da sostituire.
+    updateNote(`È uscita la v${info.latest} (hai la v${info.current}): da sorgente si aggiorna con git`);
+    return;
+  }
+  btn.textContent = "Aggiornamento disponibile";
+  btn.classList.add("update-ready");
+  updateNote(`v${info.latest} (hai la v${info.current}): premi per installarla, DriftDraft si chiude e si riapre da solo`);
+}
+
+async function startUpdate() {
+  const btn = document.getElementById("update-button");
+  btn.disabled = true;
+  const result = await backend.updateStart();
+  if (result.error) {
+    btn.disabled = false;
+    updateNote(result.error);
+    return;
+  }
+  if (!updatePollTimer) updatePollTimer = setInterval(pollUpdate, 500);
+  pollUpdate();
+}
+
+async function pollUpdate() {
+  let p;
+  try {
+    p = await backend.updateProgress();
+  } catch (e) {
+    // Il server non risponde piu': e' l'app che si sta chiudendo per
+    // installare. Niente da mostrare, fra poco si riapre.
+    return;
+  }
+  const btn = document.getElementById("update-button");
+  if (p.phase === "scarico") {
+    const pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+    updateNote(`Scarico l'aggiornamento... ${pct}%`);
+  } else if (p.phase === "verifico") {
+    updateNote("Verifico il file scaricato...");
+  } else if (p.phase === "installo") {
+    updateNote("Installo: DriftDraft si chiude e si riapre tra pochi secondi");
+  } else if (p.phase === "errore") {
+    clearInterval(updatePollTimer);
+    updatePollTimer = null;
+    btn.disabled = false;
+    updateNote(p.error || "Aggiornamento non riuscito.");
+  } else if (p.phase === "controllo") {
+    updateNote("Preparo l'aggiornamento...");
+  }
+}
+
+async function setupUpdater() {
+  const btn = document.getElementById("update-button");
+  btn.addEventListener("click", () => {
+    if (updateInfo && updateInfo.available && updateInfo.canInstall && btn.classList.contains("update-ready")) {
+      startUpdate();
+    } else {
+      checkForUpdates();
+    }
+  });
+  try {
+    const v = await backend.appVersion();
+    updateNote(`Versione installata: v${v.version}`);
+  } catch (e) {
+    updateNote("");
+  }
 }
 
 // Impostazioni (2026-09-23): un modale come roster e training, con dentro

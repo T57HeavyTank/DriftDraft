@@ -10,10 +10,10 @@ dipendenza Python e non sta in requirements.txt: e' uno strumento di
 compilazione, come PyInstaller stesso.
 
 **Perche' uno script invece di lanciare ISCC a mano**: la versione. Sta in
-main.py, e se l'installer la tenesse scritta per conto suo diventerebbe il
+driftdraft/version.py, e se l'installer la tenesse scritta per conto suo diventerebbe il
 secondo posto da ricordarsi di aggiornare ad ogni release - il tipo di
 duplicazione che prima o poi produce un installer "v1.9" che dentro ha la 2.0.
-Qui si legge da main.py e si passa a Inno, quindi resta un posto solo.
+Qui si legge da driftdraft/version.py e si passa a Inno, quindi resta un posto solo.
 """
 
 import re
@@ -43,10 +43,12 @@ CANDIDATI_ISCC = [
 
 
 def versione() -> str:
-    testo = (RADICE / "main.py").read_text(encoding="utf-8")
+    # In driftdraft/version.py dal 2026-10-19 (prima in main.py): la legge
+    # anche l'app, per confrontarsi con l'ultima release.
+    testo = (RADICE / "driftdraft" / "version.py").read_text(encoding="utf-8")
     m = re.search(r'^VERSION\s*=\s*"([^"]+)"', testo, re.MULTILINE)
     if not m:
-        sys.exit("Non trovo VERSION in main.py.")
+        sys.exit("Non trovo VERSION in driftdraft/version.py.")
     return m.group(1)
 
 
@@ -87,7 +89,7 @@ def main() -> None:
 
     v = versione()
     iscc = trova_iscc()
-    print(f"Versione da main.py: {v}")
+    print(f"Versione da driftdraft/version.py: {v}")
     print(f"Inno Setup:          {iscc}")
     print(f"Pacchetto:           {PACCHETTO}")
     print()

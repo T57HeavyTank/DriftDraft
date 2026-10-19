@@ -1363,7 +1363,10 @@ body {
   color: var(--text-dim);
 }
 
-#suggestions-sync {
+/* "Aggiorna DriftDraft" (2026-10-19) ha la stessa forma di "Aggiorna dati",
+   che gli sta sopra. */
+#suggestions-sync,
+#update-button {
   flex: none;
   background: var(--nm-surface);
   border: none;
@@ -1377,7 +1380,25 @@ body {
   transition: box-shadow 0.16s ease, color 0.16s ease;
 }
 
-#suggestions-sync:hover:not(:disabled) {
+/* "Aggiornamento disponibile": il verde di stato gia' usato per il torneo
+   connesso - porta un'informazione, non e' decorazione. */
+#update-button.update-ready {
+  color: #6fd694;
+  box-shadow: var(--nm-out-sm), inset 0 0 0 1px rgba(76, 175, 109, 0.55);
+}
+
+.theme-light #update-button.update-ready {
+  color: #256b41;
+}
+
+#update-button:disabled {
+  cursor: default;
+  box-shadow: none;
+  color: var(--nm-text-disabled);
+}
+
+#suggestions-sync:hover:not(:disabled),
+#update-button:hover:not(:disabled) {
   box-shadow: var(--nm-out);
   color: var(--sky-light);
 }

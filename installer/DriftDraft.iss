@@ -1,7 +1,7 @@
 ; Installer Windows per DriftDraft — Inno Setup 6.
 ;
 ; Si costruisce con scripts/build_installer.py, che legge la versione da
-; main.py e la passa qui: NON scriverla a mano in questo file, altrimenti
+; driftdraft/version.py e la passa qui: NON scriverla a mano in questo file, altrimenti
 ; diventa il secondo posto da ricordarsi di aggiornare ad ogni release.
 ;
 ;   python scripts/build_installer.py
