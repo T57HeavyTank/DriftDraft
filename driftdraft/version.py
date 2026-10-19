@@ -10,4 +10,4 @@ scripts/build_installer.py (nome e versione dell'installer).
 Si cambia SOLO qui, ad ogni release.
 """
 
-VERSION = "2.3"
+VERSION = "2.4"
