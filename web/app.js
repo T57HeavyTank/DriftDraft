@@ -5326,7 +5326,13 @@ function formatSyncMessage(progress) {
         // limite di frequenza severo e il backoff arriva a 120s.
         return `${progress.reason || "In attesa"} - riprovo fra ${progress.seconds}s (tentativo ${progress.attempt}/${progress.maxAttempts})...`;
       case "pausa":
-        return `Pausa di ${progress.seconds}s fra una pagina e l'altra (${done}/${target} draft)...`;
+        // Senza target nell'aggiornamento incrementale: non si sa quante
+        // partite nuove ci siano finche' non finiscono.
+        return target
+          ? `Pausa di ${progress.seconds}s fra una pagina e l'altra (${done}/${target} draft)...`
+          : `Pausa di ${progress.seconds}s fra una pagina e l'altra (${done} partite nuove finora)...`;
+      case "nuove":
+        return `Scarico le partite nuove da Leaguepedia... ${done} finora`;
       case "elaboro":
         return `Elaboro le tabelle su ${done} draft...`;
       case "esaurito":
@@ -5352,6 +5358,15 @@ function formatSyncMessage(progress) {
       ? "Leaguepedia limita le richieste, si riprova più tardi"
       : progress.error || "motivo sconosciuto";
     return `${base} · ultimo aggiornamento non riuscito: ${motivo}`;
+  }
+  // Dopo un aggiornamento incrementale (2026-10-19): quante partite sono
+  // arrivate, e se Leaguepedia ha interrotto a meta' (il pezzo scaricato e'
+  // salvato, il resto arriva al giro dopo - vedi _sync_incremental).
+  if (progress.phase === "parziale") {
+    return `${base} · ${progress.added || 0} partite nuove, il resto al prossimo aggiornamento (Leaguepedia ha interrotto)`;
+  }
+  if (progress.phase === "fatto" && progress.added != null) {
+    return `${base} · ${progress.added} partite nuove`;
   }
   return base;
 }
@@ -5401,7 +5416,7 @@ async function refreshSuggestionsDataInfo() {
     suggestionsSyncPollTimer = null;
     // Dati nuovi su disco: i suggerimenti a video sono calcolati su quelli
     // vecchi finche' non si rifanno. Basta che uno dei due sia arrivato.
-    if (progress.phase === "fatto" || progress.soloq?.phase === "fatto") refreshSuggestions();
+    if (["fatto", "parziale"].includes(progress.phase) || progress.soloq?.phase === "fatto") refreshSuggestions();
   }
 }
 

@@ -32,6 +32,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta
 
 from driftdraft.comps import COMP_REQUIREMENTS, MEMBER_THRESHOLD
 from driftdraft.data import load_champions, slugify_champion_name
@@ -407,6 +408,134 @@ def fetch_recent_drafts(
     return drafts[:total] if len(drafts) > total else drafts
 
 
+# --- Aggiornamento incrementale (2026-10-19) --------------------------------
+# Fino a qui ogni "Aggiorna dati" riscaricava da capo le 3000 draft piu'
+# recenti: sei pagine da ~550 con le pause in mezzo, e Leaguepedia di solito
+# ci bloccava alla seconda o terza. A quel punto sync() teneva i dati vecchi
+# (meno draft di quelle che c'erano), quindi in pratica non si aggiornava
+# quasi mai - e per scaricare di nuovo partite che erano gia' su disco.
+# L'utente: "non capisco come non abbiamo fatto a pensarci prima".
+#
+# Ora si chiedono solo le partite dalla piu' recente gia' presente in poi:
+# ~50 draft al giorno, quindi una pagina da 500 copre circa dieci giorni e un
+# aggiornamento settimanale e' UNA richiesta. Le nuove si uniscono alle
+# vecchie per GameId e si tengono le DEFAULT_FETCH_TOTAL piu' recenti: la
+# finestra scorre, resta di ~2 mesi come prima.
+
+# Giorni gia' scaricati che si riguardano comunque: su Leaguepedia certe
+# partite vengono inserite giorni dopo essere state giocate, con la loro data
+# vera. Chiedendo solo "dopo l'ultima data che ho" andrebbero perse per
+# sempre. I doppioni si scartano da soli (stesso GameId).
+INCREMENTAL_OVERLAP_DAYS = 3
+
+# Oltre questo buco conviene il giro completo: servirebbero comunque piu'
+# pagine di quante ne chiede lui, e la finestra verrebbe sostituita quasi
+# per intero. Con i dati di serie dell'installer non succede.
+INCREMENTAL_MAX_GAP_DAYS = 60
+
+_DATE_FMT = "%Y-%m-%d %H:%M:%S"
+
+
+def _parse_date(value: str | None) -> datetime | None:
+    try:
+        return datetime.strptime((value or "")[:19], _DATE_FMT)
+    except ValueError:
+        return None
+
+
+def fetch_drafts_since(since: str, limit: int = DEFAULT_FETCH_TOTAL, on_progress=None) -> tuple[list[ProDraft], bool]:
+    """Le draft complete giocate da `since` (data UTC "AAAA-MM-GG hh:mm:ss")
+    in poi. Ritorna (draft, completo): completo e' False se Leaguepedia ha
+    interrotto a meta'.
+
+    In ordine dalla PIU' VECCHIA, al contrario di fetch_recent_drafts, e non
+    per caso: se una pagina successiva fallisce, quello che si ha e' un
+    tratto continuo a partire da `since`, senza buchi in mezzo, e il giro
+    dopo riparte dalla sua fine. Dalla piu' recente, un'interruzione
+    lascerebbe un buco fra le partite nuove e quelle gia' su disco che
+    nessun aggiornamento successivo andrebbe piu' a riempire. Solleva solo
+    se fallisce la prima pagina (niente di scaricato, dati su disco intatti)."""
+    where = (
+        "PB.IsComplete=1 AND PB.Winner IS NOT NULL"
+        f' AND SG.DateTime_UTC >= "{since.replace(chr(34), "")}"'
+    )
+    drafts: list[ProDraft] = []
+    offset = 0
+    page = 0
+
+    def report(phase: str, **extra) -> None:
+        if on_progress:
+            on_progress({"phase": phase, "drafts": len(drafts), "target": None, **extra})
+
+    while len(drafts) < limit:
+        page += 1
+        if page > 1:
+            report("pausa", seconds=10, page=page)
+            time.sleep(10)
+        report("nuove", page=page)
+        params = {
+            "tables": "PicksAndBansS7=PB,ScoreboardGames=SG",
+            "join_on": "PB.GameId=SG.GameId",
+            "fields": ",".join(_PB_FIELDS),
+            "where": where,
+            "order_by": "SG.DateTime_UTC ASC",
+            "limit": str(_CARGO_BATCH_SIZE),
+            "offset": str(offset),
+        }
+        try:
+            data = _cargo_request(
+                params,
+                on_wait=lambda secs, att, maxatt, why: report(
+                    "attesa", seconds=round(secs), attempt=att, maxAttempts=maxatt, reason=why, page=page
+                ),
+            )
+        except RuntimeError:
+            if page == 1:
+                raise
+            return drafts, False
+
+        rows = [entry.get("title", entry) for entry in data.get("cargoquery", [])]
+        for row in rows:
+            draft = _row_to_draft(row)
+            if draft:
+                drafts.append(draft)
+        offset += len(rows)
+        report("nuove", page=page)
+        if len(rows) < _CARGO_BATCH_SIZE:
+            return drafts, True
+
+    return drafts, True
+
+
+def _sync_incremental(esistenti: list[ProDraft], piu_recente: datetime, total: int, on_progress=None) -> dict:
+    da = (piu_recente - timedelta(days=INCREMENTAL_OVERLAP_DAYS)).strftime(_DATE_FMT)
+    nuove, completo = fetch_drafts_since(da, limit=total, on_progress=on_progress)
+
+    per_id = {d.game_id: d for d in esistenti}
+    aggiunte = sum(1 for d in nuove if d.game_id not in per_id)
+    for d in nuove:
+        per_id[d.game_id] = d  # la versione appena scaricata vince: puo' essere stata corretta
+    unite = sorted(per_id.values(), key=lambda d: d.date or "", reverse=True)[:total]
+
+    if on_progress:
+        on_progress({"phase": "elaboro", "drafts": len(unite), "target": total})
+    # Interrotto a meta': si salva quello che c'e' (e' un tratto continuo,
+    # vedi fetch_drafts_since) ma la data di aggiornamento resta quella di
+    # prima. Cosi' i dati non sembrano freschi quando non lo sono, e
+    # l'aggiornamento automatico ci riprova al prossimo avvio invece di
+    # aspettare una settimana con un buco fino a oggi.
+    fetched_at = None if completo else _fetched_at()
+    save_drafts(unite, fetched_at=fetched_at)
+    save_tables(build_tables(unite))
+    return {**status(), "added": aggiunte, "partial": not completo}
+
+
+def _fetched_at() -> float | None:
+    if not DRAFTS_PATH.exists():
+        return None
+    return json.loads(DRAFTS_PATH.read_text(encoding="utf-8")).get("fetched_at")
+
+
 # Quante draft servono a una squadra perche' la sua pool voglia dire qualcosa.
 # A 15 restano 197 squadre che coprono l'80% dei lati; a 20 sarebbero 114
 # (57%), a 10 sarebbero 261 (93%) ma con pool troppo sottili per distinguere
@@ -776,8 +905,10 @@ def _write_atomic(path, testo: str) -> None:
     tmp.replace(path)
 
 
-def save_drafts(drafts: list[ProDraft], path=DRAFTS_PATH) -> None:
-    payload = {"fetched_at": time.time(), "drafts": [asdict(d) for d in drafts]}
+def save_drafts(drafts: list[ProDraft], path=DRAFTS_PATH, fetched_at: float | None = None) -> None:
+    # fetched_at esplicito solo quando l'aggiornamento e' rimasto a meta'
+    # (vedi _sync_incremental): li' la data giusta e' quella di prima.
+    payload = {"fetched_at": fetched_at or time.time(), "drafts": [asdict(d) for d in drafts]}
     _write_atomic(path, json.dumps(payload, ensure_ascii=False, indent=2))
 
 
@@ -858,7 +989,16 @@ def sync(total: int = DEFAULT_FETCH_TOTAL, on_progress=None) -> dict:
 
     Chiamata in modo SINCRONO resta bloccante quanto prima; il percorso usato
     dalla UI passa pero' da start_sync()/sync_progress() qui sotto, che la
-    fanno girare in un thread e ne raccontano l'avanzamento."""
+    fanno girare in un thread e ne raccontano l'avanzamento.
+
+    Dal 2026-10-19 scarica solo le partite nuove se su disco ci sono gia'
+    draft abbastanza recenti (vedi _sync_incremental); il giro completo qui
+    sotto resta per chi non ne ha o le ha troppo vecchie."""
+    esistenti = load_drafts()
+    piu_recente = max((d for d in (_parse_date(x.date) for x in esistenti) if d), default=None)
+    if piu_recente and datetime.utcnow() - piu_recente <= timedelta(days=INCREMENTAL_MAX_GAP_DAYS):
+        return _sync_incremental(esistenti, piu_recente, total, on_progress)
+
     drafts = fetch_recent_drafts(total=total, on_progress=on_progress)
     if not drafts:
         raise RuntimeError("Nessuna draft valida scaricata da Leaguepedia.")
@@ -930,11 +1070,20 @@ def start_sync(total: int = DEFAULT_FETCH_TOTAL) -> dict:
 
     def worker() -> None:
         try:
-            sync(total=total, on_progress=lambda p: _set_sync_state(**p))
+            esito = sync(total=total, on_progress=lambda p: _set_sync_state(**p))
         except Exception as e:
             _set_sync_state(running=False, phase="errore", error=str(e), finishedAt=time.time())
             return
-        _set_sync_state(running=False, phase="fatto", error=None, finishedAt=time.time())
+        # "parziale": l'aggiornamento incrementale e' stato interrotto a meta'
+        # ma ha salvato un pezzo (vedi _sync_incremental). "added": quante
+        # partite nuove sono arrivate, la UI lo dice accanto ai dati.
+        _set_sync_state(
+            running=False,
+            phase="parziale" if esito.get("partial") else "fatto",
+            added=esito.get("added"),
+            error=None,
+            finishedAt=time.time(),
+        )
 
     threading.Thread(target=worker, daemon=True).start()
     return {"started": True}
