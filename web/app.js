@@ -47,7 +47,7 @@ const backend = window.pywebview
       updateCheck: () => window.pywebview.api.update_check(),
       updateStart: () => window.pywebview.api.update_start(),
       updateProgress: () => window.pywebview.api.update_progress(),
-      trainingSync: () => window.pywebview.api.training_sync(),
+      trainingSync: (parti) => window.pywebview.api.training_sync(parti),
       trainingSyncProgress: () => window.pywebview.api.training_sync_progress(),
       trainingStart: (mode, side, enemyTeamUrl, team, series) =>
         window.pywebview.api.training_start(mode, side, enemyTeamUrl, team, series),
@@ -210,7 +210,11 @@ const backend = window.pywebview
       updateCheck: () => fetch("/api/update/check").then((r) => r.json()),
       updateStart: () => fetch("/api/update/start", { method: "POST" }).then((r) => r.json()),
       updateProgress: () => fetch("/api/update/progress").then((r) => r.json()),
-      trainingSync: () => fetch("/api/training/sync", { method: "POST" }).then((r) => r.json()),
+      trainingSync: (parti) =>
+        fetch("/api/training/sync", {
+          method: "POST",
+          ...(parti ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ parti }) } : {}),
+        }).then((r) => r.json()),
       trainingSyncProgress: () => fetch("/api/training/sync-progress").then((r) => r.json()),
       trainingTeams: () => fetch("/api/training/teams").then((r) => r.json()),
       trainingStart: (mode, side, enemyTeamUrl, team, series) =>
@@ -2067,6 +2071,7 @@ async function init() {
   setupThemeToggle();
   setupSettingsModal();
   setupUpdater();
+  setupAutoDataSync();
   setupCompBordersToggle();
   setupCounterDiagramToggle();
   setupLaneCounterToggle();
@@ -5330,12 +5335,25 @@ function formatSyncMessage(progress) {
         return `Scarico da Leaguepedia... ${done}/${target} draft`;
     }
   }
-  if (progress.phase === "errore") return progress.error || "Aggiornamento non riuscito.";
-  if (!d.synced) return "Dati non ancora scaricati - premi \"Aggiorna dati\".";
+  if (!d.synced) {
+    if (progress.phase === "errore") return progress.error || "Aggiornamento non riuscito.";
+    return "Dati non ancora scaricati - premi \"Aggiorna dati\".";
+  }
 
   const when = d.fetchedAt ? new Date(d.fetchedAt * 1000).toLocaleString("it-IT") : "?";
   const patches = (d.recentPatches || []).join(", ");
-  return `${d.draftsCount} draft${patches ? ` (patch ${patches})` : ""} - aggiornate il ${when}`;
+  const base = `${d.draftsCount} draft${patches ? ` (patch ${patches})` : ""} - aggiornate il ${when}`;
+  // Un tentativo fallito non cancella i dati gia' su disco, quindi va detto
+  // insieme a quelli e non al loro posto: con l'aggiornamento automatico
+  // (2026-10-19) il tentativo parte da solo, e la sola scritta d'errore
+  // nascondeva su che draft si stava lavorando.
+  if (progress.phase === "errore") {
+    const motivo = /limite di frequenza/.test(progress.error || "")
+      ? "Leaguepedia limita le richieste, si riprova più tardi"
+      : progress.error || "motivo sconosciuto";
+    return `${base} · ultimo aggiornamento non riuscito: ${motivo}`;
+  }
+  return base;
 }
 
 // La parte soloQ del messaggio (2026-09-23): lo stesso "Aggiorna dati"
@@ -5396,6 +5414,54 @@ async function startDataSync() {
     return;
   }
   refreshSuggestionsDataInfo();
+}
+
+// --- Aggiornamento automatico dei dati (2026-10-19) ---
+// Le Impostazioni dicevano "aggiornate il 06/09/2026" mentre ai Worlds si
+// giocava la 26.20: suggerimenti su un meta di tre patch prima, e quasi
+// nessuno ci fa caso o si ricorda di premere "Aggiorna dati". Ora ci pensa
+// l'app: all'avvio, e poi ogni qualche ora se resta aperta, riscarica in
+// sottofondo la parte piu' vecchia di una settimana - solo quella (vedi
+// "parti" in api_training_sync). Su un'installazione nuova significa anche
+// scaricare i dati soloQ, che il pacchetto non contiene. Il bottone resta
+// per chi vuole farlo subito. Se manca la rete o un sito rifiuta, i dati
+// vecchi restano dove sono e ci si riprova al giro dopo.
+const AUTO_SYNC_MAX_AGE_S = 7 * 24 * 3600;
+const AUTO_SYNC_CHECK_MS = 6 * 3600 * 1000;
+let autoSyncEnabled = localStorage.getItem("autoDataSync") !== "false";
+
+function datiVecchi(data) {
+  if (!data || !data.synced || !data.fetchedAt) return true;
+  return Date.now() / 1000 - data.fetchedAt > AUTO_SYNC_MAX_AGE_S;
+}
+
+async function autoSyncIfStale() {
+  if (!autoSyncEnabled) return;
+  let progress;
+  try {
+    progress = await backend.trainingSyncProgress();
+  } catch (e) {
+    return;
+  }
+  if (syncRunning(progress)) return;
+  const parti = [];
+  if (datiVecchi(progress.data)) parti.push("pro");
+  if (datiVecchi(progress.soloq && progress.soloq.data)) parti.push("soloq");
+  if (!parti.length) return;
+  const result = await backend.trainingSync(parti);
+  if (!result.error) refreshSuggestionsDataInfo();
+}
+
+function setupAutoDataSync() {
+  const box = document.getElementById("auto-data-sync");
+  box.checked = autoSyncEnabled;
+  box.addEventListener("change", () => {
+    autoSyncEnabled = box.checked;
+    localStorage.setItem("autoDataSync", box.checked);
+    autoSyncIfStale();
+  });
+  autoSyncIfStale();
+  setInterval(autoSyncIfStale, AUTO_SYNC_CHECK_MS);
 }
 
 // In quale dei tre stati sta un campione, dal punto di vista dei due elenchi

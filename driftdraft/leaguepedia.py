@@ -763,10 +763,22 @@ def build_tables(drafts: list[ProDraft]) -> dict:
     }
 
 
-def save_drafts(drafts: list[ProDraft], path=DRAFTS_PATH) -> None:
+def _write_atomic(path, testo: str) -> None:
+    """Scrive su un file temporaneo e poi lo sostituisce in un colpo solo,
+    come soloq.save. Dal 2026-10-19 i dati si aggiornano anche da soli in
+    sottofondo (vedi autoSyncIfStale in app.js): chiudere l'app proprio
+    mentre salva diventa plausibile, e un JSON scritto a meta' renderebbe
+    illeggibili draft e tabelle al riavvio. Cosi' resta il file vecchio o
+    c'e' quello nuovo, mai una via di mezzo."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(testo, encoding="utf-8")
+    tmp.replace(path)
+
+
+def save_drafts(drafts: list[ProDraft], path=DRAFTS_PATH) -> None:
     payload = {"fetched_at": time.time(), "drafts": [asdict(d) for d in drafts]}
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_atomic(path, json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 # Cache di load_drafts, con chiave (percorso, mtime, dimensione). Il file e'
@@ -803,8 +815,7 @@ def load_drafts(path=DRAFTS_PATH) -> list[ProDraft]:
 
 
 def save_tables(tables: dict, path=TABLES_PATH) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(tables, ensure_ascii=False), encoding="utf-8")
+    _write_atomic(path, json.dumps(tables, ensure_ascii=False))
 
 
 # Una ricostruzione alla volta: due richieste HTTP quasi simultanee dopo un

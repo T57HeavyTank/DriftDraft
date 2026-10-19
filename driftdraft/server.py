@@ -1259,9 +1259,16 @@ def api_training_sync():
     # soloq.py): l'utente, "con un 'aggiorna dati' in 10-20 minuti si hanno
     # tutte le risposte necessarie". Partono insieme - siti diversi, nessuna
     # ragione di aspettare - e ognuno racconta il suo avanzamento.
+    #
+    # "parti" (2026-10-19) serve all'aggiornamento automatico, che riscarica
+    # solo cio' che e' vecchio: su un'installazione nuova le draft pro sono
+    # gia' nel pacchetto ma i dati soloQ no, e rifare minuti di Leaguepedia
+    # per niente sarebbe solo carico sul loro limite di frequenza. Senza
+    # "parti" (il bottone) si aggiorna tutto, come prima.
+    parti = set((request.json or {}).get("parti") or ["pro", "soloq"])
     try:
-        esito = leaguepedia.start_sync()
-        esito["soloq"] = soloq.start_sync()
+        esito = leaguepedia.start_sync() if "pro" in parti else {"skipped": True}
+        esito["soloq"] = soloq.start_sync() if "soloq" in parti else {"skipped": True}
         return json.dumps(esito, ensure_ascii=False)
     except Exception as e:
         return json.dumps({"error": f"Impossibile avviare l'aggiornamento: {e}"})

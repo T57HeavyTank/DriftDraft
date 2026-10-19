@@ -628,6 +628,17 @@
           </span>
           <button type="button" id="suggestions-sync" title="Riscarica le draft pro recenti da Leaguepedia e i dati soloQ (Emerald+, 30 giorni) da lolalytics">Aggiorna dati</button>
         </div>
+        <!-- Aggiornamento automatico dei dati (2026-10-19): vedi
+             autoSyncIfStale in app.js. -->
+        <label class="settings-row">
+          <span class="settings-name">Aggiornamento automatico
+            <span class="settings-note">Riscarica in sottofondo i dati più vecchi di una settimana</span>
+          </span>
+          <span class="toggle-switch">
+            <input type="checkbox" id="auto-data-sync">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          </span>
+        </label>
         <!-- Aggiornamento dall'app (2026-10-19): niente browser ne' GitHub
              a vista. Vedi driftdraft/updater.py. -->
         <div class="settings-row">
