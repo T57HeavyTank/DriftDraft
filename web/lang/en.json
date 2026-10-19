@@ -336,6 +336,11 @@
     "{0} — ban suggerito al Blue Side": "{0} — suggested ban for Blue Side",
     "{0} — ban suggerito al Red Side": "{0} — suggested ban for Red Side",
     "suggerito": "suggested",
+    "{0} — CONTESO in {1}: conviene al Blue Side ({2}) e al Red Side ({3})": "{0} — CONTESTED in {1}: good for Blue Side ({2}) and for Red Side ({3})",
+    "{0} — per il Blue Side in {1} (punteggio sinergia/counter: {2})": "{0} — for Blue Side in {1} (synergy/counter score: {2})",
+    "{0} — per il Red Side in {1} (punteggio sinergia/counter: {2})": "{0} — for Red Side in {1} (synergy/counter score: {2})",
+    "{0} / {1} — {2}": "{0} / {1} — {2}",
+    "{0} ({1})": "{0} ({1})",
     "Non ho abbastanza dati per suggerire qui": "I don't have enough data to suggest anything here",
     "Nelle draft pro scaricate non ci sono abbastanza partite in cui qualcuno sia stato pescato in risposta a questi campioni. Di solito succede con i campioni che si gestiscono bannandoli, non rispondendogli in draft.": "The downloaded pro drafts don't have enough games where someone was picked in response to these champions. It usually happens with champions that get handled by banning them, not by answering them in draft.",
     "{0}min {1}%": "{0}min {1}%",
@@ -473,6 +478,7 @@
     ", tutto dal soloQ": ", all from soloQ",
     ", di cui {0} dal soloQ": ", {0} of it from soloQ",
     ", quanto lo giocano: {0}%": ", how much they play it: {0}%",
+    ", tier {0}": ", tier {0}",
     " dal soloQ": " from soloQ"
   }
 }

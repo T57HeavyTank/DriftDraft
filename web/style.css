@@ -3837,6 +3837,20 @@ label.settings-row {
   box-shadow: none;
 }
 
+/* Menu della lingua (2026-10-19): lo stesso .combo dei team, che pero' nasce
+   per riempire la riga (flex: 1). Qui sta a destra come gli altri controlli
+   delle Impostazioni, largo quanto basta per "简体中文" o "Español". Il campo
+   e' di sola lettura e apre l'elenco al click: cursore da bottone, non da
+   testo. */
+.combo.settings-lang {
+  flex: none;
+  width: 150px;
+}
+
+.combo.settings-lang input[type="text"] {
+  cursor: pointer;
+}
+
 .roster-unsaved {
   position: absolute;
   inset: 0;

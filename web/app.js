@@ -2070,6 +2070,7 @@ async function init() {
   setupSidebarSizeSlider();
   setupThemeToggle();
   setupSettingsModal();
+  setupLanguageMenu();
   setupUpdater();
   setupAutoDataSync();
   setupCompBordersToggle();
@@ -2147,6 +2148,34 @@ function setupThemeToggle() {
     localStorage.setItem("themeLight", toggle.checked);
     applyTheme(toggle.checked);
   });
+}
+
+// --- Lingua (2026-10-19) ---
+// Menu a tendina in Impostazioni > Aspetto. Le lingue e la traduzione stanno in
+// web/i18n.js; qui solo la scelta, con lo stesso combobox dei team. Cambiare
+// lingua ricarica la pagina: ogni testo gia' a video si rifa' nella lingua
+// nuova, senza stati a meta'. Il campo e' di sola lettura, e un click in
+// qualunque punto apre l'elenco: qui non c'e' niente da scrivere.
+function setupLanguageMenu() {
+  const lingue = window.APP_LINGUE || [["it", "Italiano"]];
+  const attuale = window.APP_LANG || "it";
+  const input = document.getElementById("lang-combo");
+  input.value = (lingue.find(([codice]) => codice === attuale) || lingue[0])[1];
+  setupCombo(
+    "lang-picker",
+    () => lingue.map(([codice, nome]) => ({ key: codice, label: nome, current: codice === attuale })),
+    (codice) => {
+      if (codice === attuale) return;
+      try {
+        localStorage.setItem("lang", codice);
+      } catch (e) {
+        return;
+      }
+      location.reload();
+    }
+  );
+  const arrow = document.querySelector("#lang-picker .combo-arrow");
+  input.addEventListener("click", () => arrow.click());
 }
 
 // --- Aggiorna DriftDraft (2026-10-19) ---

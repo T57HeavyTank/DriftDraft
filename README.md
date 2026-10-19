@@ -10,7 +10,8 @@ Gira sul tuo computer completamente in locale: **nessun dato esce dal tuo pc**, 
 richieste che fai tu a op.gg, lolalytics, u.gg, Leaguepedia e drafter.lol (e a
 GitHub, quando controlli se c'è una versione nuova).
 
-L'interfaccia è in italiano e in inglese (Impostazioni → Lingua).
+L'interfaccia è in italiano, inglese, francese, tedesco, spagnolo e cinese
+(Impostazioni → Lingua).
 
 ![La griglia campioni con una draft in corso](docs/1-main.png)
 

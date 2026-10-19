@@ -31,9 +31,23 @@
 // Le frasi nuove non presenti nel dizionario restano in italiano e finiscono in
 // window.i18nMissing: aprendo l'app in inglese e girando le schermate, quell'insieme
 // e' l'elenco di cosa manca da tradurre.
+// Le lingue disponibili, col nome che ognuna ha nella propria lingua: e' cosi'
+// che compaiono nel menu (Impostazioni > Aspetto > Lingua, vedi
+// setupLanguageMenu in app.js), perche' chi non capisce la lingua attuale deve
+// poter riconoscere la sua. Per aggiungerne una: una riga qui e il suo
+// web/lang/<codice>.json, con le stesse chiavi di en.json.
+window.APP_LINGUE = [
+  ["it", "Italiano"],
+  ["en", "English"],
+  ["fr", "Français"],
+  ["de", "Deutsch"],
+  ["es", "Español"],
+  ["zh", "简体中文"],
+];
+
 (function () {
   const LANG_KEY = "lang";
-  const LINGUE = ["it", "en"];
+  const LINGUE = window.APP_LINGUE.map(([codice]) => codice);
 
   function linguaIniziale() {
     try {
@@ -42,9 +56,10 @@
     } catch (e) {
       // storage non disponibile: si segue il sistema
     }
-    // La prima volta si segue la lingua di Windows: italiano su un pc
-    // italiano, inglese ovunque altro.
-    return (navigator.language || "it").toLowerCase().startsWith("it") ? "it" : "en";
+    // La prima volta si segue la lingua di Windows, se e' una di quelle
+    // disponibili; altrimenti l'inglese.
+    const sistema = (navigator.language || "en").toLowerCase().slice(0, 2);
+    return LINGUE.includes(sistema) ? sistema : "en";
   }
 
   const LANG = linguaIniziale();
@@ -54,7 +69,9 @@
   const esatte = new Map();
   const modelli = [];
   const frammenti = [];
-  const prodotti = new Set(); // testi gia' tradotti: non vanno ritradotti ne' segnalati
+  // Testi gia' tradotti: non vanno ritradotti ne' segnalati. I nomi delle
+  // lingue ci stanno da subito: nel menu restano scritti nella propria lingua.
+  const prodotti = new Set(window.APP_LINGUE.map(([, nome]) => nome));
   const mancanti = new Set();
   window.i18nMissing = mancanti;
 
@@ -66,13 +83,20 @@
     const ordine = [];
     let src = "";
     let fisso = "";
+    let fissoTot = 0;
     for (const p of parti) {
       const m = p.match(/^\{(\d+)\}$/);
       if (m) {
         ordine.push(Number(m[1]));
-        src += "([\\s\\S]*?)";
+        // Una parte variabile non scavalca mai un " · ": e' il separatore
+        // con cui app.js mette in fila frasi indipendenti ("Bot: ha scelto
+        // X · Bot: gioca come T1"). Senza questo vincolo il {0} finale della
+        // prima frase si mangiava anche la seconda, e in tedesco - dove il
+        // verbo va in fondo - usciva "hat X · Bot: spielt wie T1 gepickt".
+        src += "((?:(?! · )[\\s\\S])*?)";
       } else {
         src += escape(p);
+        fissoTot += p.length;
         if (p.length > fisso.length) fisso = p;
       }
     }
@@ -81,6 +105,7 @@
       ordine,
       en,
       fisso, // il pezzo fisso piu' lungo: se manca nel testo, inutile provare la regex
+      fissoTot, // quanto testo fisso in tutto: decide chi si prova prima
     };
   }
 
@@ -102,9 +127,11 @@
         for (const [it, en] of Object.entries(diz.frammenti || {})) {
           frammenti.push(compila(it, en, false));
         }
-        // Prima i modelli piu' specifici: a parita' di testo vince quello con
-        // piu' parte fissa (un "{0} draft" non deve mangiarsi frasi piu' lunghe).
-        modelli.sort((a, b) => b.fisso.length - a.fisso.length);
+        // Prima i modelli piu' specifici, cioe' con piu' testo fisso in tutto:
+        // "{0} — per il Blue Side in {1} (...)" va provato prima di
+        // "{0} — per il Blue Side{1} (...)", che combacerebbe anche lui
+        // mettendo " in Bot" intero nel segnaposto, senza tradurlo.
+        modelli.sort((a, b) => b.fissoTot - a.fissoTot);
       }
     } catch (e) {
       // Senza dizionario l'app resta in italiano: meglio che non partire.
@@ -244,27 +271,4 @@
   window.alert = (msg) => nativi.alert.call(window, t(String(msg ?? "")));
   window.confirm = (msg) => nativi.confirm.call(window, t(String(msg ?? "")));
   window.prompt = (msg, def) => nativi.prompt.call(window, t(String(msg ?? "")), def);
-})();
-
-// La riga "Lingua" delle Impostazioni. Si cambia ricaricando la pagina: ogni
-// testo gia' a video si rifa' nella lingua nuova, senza stati a meta'.
-(function () {
-  function collega() {
-    for (const lingua of ["it", "en"]) {
-      const btn = document.getElementById(`lang-${lingua}`);
-      if (!btn) continue;
-      btn.classList.toggle("active", window.APP_LANG === lingua);
-      btn.addEventListener("click", () => {
-        if (window.APP_LANG === lingua) return;
-        try {
-          localStorage.setItem("lang", lingua);
-        } catch (e) {
-          return;
-        }
-        location.reload();
-      });
-    }
-  }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", collega);
-  else collega();
 })();

@@ -520,14 +520,16 @@
     <div class="settings-body">
       <section class="settings-section">
         <h3>Aspetto</h3>
-        <!-- Lingua (2026-10-19): vedi web/i18n.js. "Italiano" ed "English"
-             restano scritti cosi' in tutte e due le lingue: chi non capisce
-             la lingua attuale deve poter riconoscere la propria. -->
+        <!-- Lingua (2026-10-19): vedi web/i18n.js. Un menu a tendina, lo
+             stesso combobox dei team (setupCombo), con ogni lingua scritta
+             nella propria: chi non capisce quella attuale deve poter
+             riconoscere la sua. -->
         <div class="settings-row">
           <span class="settings-name">Lingua</span>
-          <div class="settings-side">
-            <button type="button" class="toggle-chip" id="lang-it">Italiano</button>
-            <button type="button" class="toggle-chip" id="lang-en">English</button>
+          <div class="combo settings-lang" id="lang-picker">
+            <input type="text" id="lang-combo" readonly autocomplete="off">
+            <button type="button" class="combo-arrow" title="Lingua">▼</button>
+            <div class="combo-list hidden"></div>
           </div>
         </div>
         <label class="settings-row">

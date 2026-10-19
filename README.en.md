@@ -11,7 +11,8 @@ It runs entirely locally on your computer: **no data leaves your PC**, except
 the requests you make to op.gg, lolalytics, u.gg, Leaguepedia and drafter.lol
 (and to GitHub, when you check for a new version).
 
-The interface is available in English and Italian (Settings → Language).
+The interface is available in English, Italian, French, German, Spanish and
+Chinese (Settings → Language).
 
 ![The champion grid with a draft in progress](docs/en/1-main.png)
 

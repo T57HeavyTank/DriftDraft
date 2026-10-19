@@ -1,4 +1,4 @@
-; Installer Windows per DriftDraft — Inno Setup 6.
+﻿; Installer Windows per DriftDraft — Inno Setup 6.
 ;
 ; Si costruisce con scripts/build_installer.py, che legge la versione da
 ; driftdraft/version.py e la passa qui: NON scriverla a mano in questo file, altrimenti
@@ -51,12 +51,18 @@ SolidCompression=yes
 WizardStyle=modern
 ShowLanguageDialog=auto
 
-; Inglese dal 2026-10-19, insieme all'interfaccia in inglese (vedi web/i18n.js).
-; Inno sceglie da solo la lingua di Windows; la finestra di scelta compare solo
-; se Windows non e' ne' in italiano ne' in inglese (ShowLanguageDialog=auto).
+; Altre lingue dal 2026-10-19, insieme a quelle dell'interfaccia (vedi
+; web/i18n.js). Inno sceglie da solo la lingua di Windows; la finestra di scelta
+; compare solo se Windows e' in una lingua che qui non c'e' (ShowLanguageDialog
+; =auto). Il cinese manca: Inno Setup 6 non ha un file ufficiale per il cinese,
+; e su un Windows cinese l'installer propone le altre (l'app poi si apre in
+; cinese da sola).
 [Languages]
 Name: "italiano"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"
+Name: "german"; MessagesFile: "compiler:Languages\German.isl"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [CustomMessages]
 italiano.DesktopIcon=Crea un collegamento sul desktop
@@ -65,6 +71,15 @@ italiano.LaunchApp=Avvia %1
 english.DesktopIcon=Create a desktop shortcut
 english.Shortcuts=Shortcuts:
 english.LaunchApp=Launch %1
+french.DesktopIcon=Créer un raccourci sur le bureau
+french.Shortcuts=Raccourcis :
+french.LaunchApp=Lancer %1
+german.DesktopIcon=Desktop-Verknüpfung erstellen
+german.Shortcuts=Verknüpfungen:
+german.LaunchApp=%1 starten
+spanish.DesktopIcon=Crear un acceso directo en el escritorio
+spanish.Shortcuts=Accesos directos:
+spanish.LaunchApp=Iniciar %1
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:Shortcuts}"
@@ -99,3 +114,6 @@ Type: files; Name: "{app}\data\leaguepedia_tables.json"
 [Messages]
 italiano.FinishedLabel=Installazione completata.%n%nAl primo avvio DriftDraft scarichera' le immagini dei campioni (circa 21 MB): serve una connessione a Internet, e si fa una volta sola.
 english.FinishedLabel=Setup is complete.%n%nOn first launch DriftDraft will download the champion images (about 21 MB): it needs an Internet connection, and it only happens once.
+french.FinishedLabel=Installation terminée.%n%nAu premier lancement, DriftDraft téléchargera les images des champions (environ 21 Mo) : il faut une connexion Internet, et cela n'arrive qu'une fois.
+german.FinishedLabel=Installation abgeschlossen.%n%nBeim ersten Start lädt DriftDraft die Champion-Bilder herunter (etwa 21 MB): Dafür ist eine Internetverbindung nötig, und es passiert nur einmal.
+spanish.FinishedLabel=Instalación completada.%n%nAl iniciarse por primera vez, DriftDraft descargará las imágenes de los campeones (unos 21 MB): necesita conexión a Internet, y solo ocurre una vez.
