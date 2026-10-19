@@ -6382,6 +6382,9 @@ function renderBans(team) {
 }
 
 function bindTagFilterClick(el, tag) {
+  // Il tag si confronta da qui e non dal testo visibile: con l'interfaccia in
+  // inglese (vedi i18n.js) il testo della chip e' la traduzione.
+  el.dataset.tag = tag;
   el.addEventListener("click", (e) => {
     e.stopPropagation(); // non deve anche aprire/chiudere il profilo della card
     if (activeTagFilters.has(tag)) {
@@ -6393,7 +6396,7 @@ function bindTagFilterClick(el, tag) {
     // tutte le sue occorrenze, non solo quella cliccata
     const isActive = activeTagFilters.has(tag);
     document.querySelectorAll(".comp-tag").forEach((chip) => {
-      if (chip.textContent === tag) {
+      if (chip.dataset.tag === tag) {
         chip.classList.toggle("filter-active", isActive);
       }
     });

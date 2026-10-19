@@ -520,6 +520,16 @@
     <div class="settings-body">
       <section class="settings-section">
         <h3>Aspetto</h3>
+        <!-- Lingua (2026-10-19): vedi web/i18n.js. "Italiano" ed "English"
+             restano scritti cosi' in tutte e due le lingue: chi non capisce
+             la lingua attuale deve poter riconoscere la propria. -->
+        <div class="settings-row">
+          <span class="settings-name">Lingua</span>
+          <div class="settings-side">
+            <button type="button" class="toggle-chip" id="lang-it">Italiano</button>
+            <button type="button" class="toggle-chip" id="lang-en">English</button>
+          </div>
+        </div>
         <label class="settings-row">
           <span class="settings-name">Tema chiaro</span>
           <span class="toggle-switch">
@@ -694,6 +704,8 @@
   </div>
 </div>
 
+<!-- Prima di app.js: traduce la pagina se la lingua non e' l'italiano (vedi i18n.js). -->
+<script src="/web/i18n.js"></script>
 <script src="/web/app.js"></script>
 </body>
 </html>

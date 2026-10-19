@@ -1,5 +1,7 @@
 # DriftDraft
 
+*Italiano · [English](README.en.md)*
+
 Strumento di coaching per le draft di *League of Legends*. Ti dice che
 composizioni stanno prendendo forma mentre draftate, quali pick convengono a
 ciascun lato, sia come preparazione che in tempo reale su drafter.lol, e ti allena contro un bot che gioca come una squadra vera.
@@ -7,6 +9,8 @@ ciascun lato, sia come preparazione che in tempo reale su drafter.lol, e ti alle
 Gira sul tuo computer completamente in locale: **nessun dato esce dal tuo pc**, tranne le
 richieste che fai tu a op.gg, lolalytics, u.gg, Leaguepedia e drafter.lol (e a
 GitHub, quando controlli se c'è una versione nuova).
+
+L'interfaccia è in italiano e in inglese (Impostazioni → Lingua).
 
 ![La griglia campioni con una draft in corso](docs/1-main.png)
 

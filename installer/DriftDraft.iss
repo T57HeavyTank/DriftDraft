@@ -49,12 +49,25 @@ SetupIconFile=..\assets\icon.ico
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+ShowLanguageDialog=auto
 
+; Inglese dal 2026-10-19, insieme all'interfaccia in inglese (vedi web/i18n.js).
+; Inno sceglie da solo la lingua di Windows; la finestra di scelta compare solo
+; se Windows non e' ne' in italiano ne' in inglese (ShowLanguageDialog=auto).
 [Languages]
 Name: "italiano"; MessagesFile: "compiler:Languages\Italian.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[CustomMessages]
+italiano.DesktopIcon=Crea un collegamento sul desktop
+italiano.Shortcuts=Collegamenti:
+italiano.LaunchApp=Avvia %1
+english.DesktopIcon=Create a desktop shortcut
+english.Shortcuts=Shortcuts:
+english.LaunchApp=Launch %1
 
 [Tasks]
-Name: "desktopicon"; Description: "Crea un collegamento sul desktop"; GroupDescription: "Collegamenti:"
+Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:Shortcuts}"
 
 [Files]
 ; Tutto il contenuto di dist/DriftDraft, cioe' quello che produce PyInstaller.
@@ -67,7 +80,7 @@ Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Avvia {#MyAppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchApp,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 ; Roba che l'app si e' scaricata da sola dopo l'installazione: Inno non la
@@ -85,3 +98,4 @@ Type: files; Name: "{app}\data\leaguepedia_tables.json"
 
 [Messages]
 italiano.FinishedLabel=Installazione completata.%n%nAl primo avvio DriftDraft scarichera' le immagini dei campioni (circa 21 MB): serve una connessione a Internet, e si fa una volta sola.
+english.FinishedLabel=Setup is complete.%n%nOn first launch DriftDraft will download the champion images (about 21 MB): it needs an Internet connection, and it only happens once.
