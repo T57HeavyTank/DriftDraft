@@ -316,9 +316,12 @@ def collaudo_siti(base: str) -> None:
     def valutazione():
         r = api(base, "/api/training/evaluate", {"tier": "emerald_plus"}, timeout=180)
         verifica(len(r.get("green") or []) >= 5, "valutazione senza curva")
-        errori = r.get("laneErrors") or []
-        if errori:
-            raise Avviso(f"valutazione fatta, ma con {len(errori)} curve mancanti: {errori[0]}")
+        # laneErrors e' {corsia: motivo}: un matchup raro senza dati su
+        # lolalytics e' normale (l'app lo tratta come neutro), non un guasto.
+        errori = r.get("laneErrors") or {}
+        motivi = list(errori.values()) if isinstance(errori, dict) else list(errori)
+        if motivi:
+            raise Avviso(f"valutazione fatta, ma con {len(motivi)} curve mancanti: {motivi[0]}")
         return "curve di tutte e 5 le corsie scaricate, previsione " + " ".join(f"{v:.0f}" for v in r["green"])
 
     for nome, fn in [
