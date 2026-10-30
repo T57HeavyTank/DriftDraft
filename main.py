@@ -35,7 +35,10 @@ import threading
 if getattr(sys, "frozen", False):
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = os.path.join(sys._MEIPASS, "ms-playwright")
 
-PORT = 8721
+# DRIFTDRAFT_PORT solo per scripts/rilascia.py (2026-10-30): collauda l'app
+# appena installata su una porta libera anche quando un altro DriftDraft e'
+# aperto sulla 8721. Chi usa l'app non la imposta mai.
+PORT = int(os.environ.get("DRIFTDRAFT_PORT") or 8721)
 # La versione sta in driftdraft/version.py (dal 2026-10-19): la legge anche il
 # server, per l'aggiornamento dall'app. Nessun import pesante: si puo' fare qui.
 from driftdraft.version import VERSION  # noqa: E402
