@@ -48,6 +48,7 @@ Playwright direttamente.
 """
 
 import queue
+import re
 import shutil
 import tempfile
 import threading
@@ -551,8 +552,11 @@ _STATE_JS = r"""
     // Due percorsi: champion-icons/<id>.png fino all'ottobre 2026,
     // game/champions/<id>.png (dentro il proxy immagini di Next.js, quindi
     // con %2F al posto di /) dal rifacimento del sito - verificato il
-    // 2026-10-16 su un ban di Ziggs (115).
-    const m = src.match(/(?:champion-icons|champions)(?:%2F|\/)(-?\d+)\.png/);
+    // 2026-10-16 su un ban di Ziggs (115). Dal 2026-10-30 (trovato dal
+    // collaudo periodico, scripts/collaudo.py) anche
+    // game-sized/champions/<id>-<lato>.webp, gia' ridimensionate: si
+    // accettano tutti e tre.
+    const m = src.match(/(?:champion-icons|champions)(?:%2F|\/)(-?\d+)(?:-\d+)?\.(?:png|webp)/);
     return m ? m[1] : null;
   };
   const sideBanIds = (side) => [1, 2, 3, 4, 5].map((i) => banId(`${side}-ban-${i}`));
@@ -611,7 +615,13 @@ _STATE_JS = r"""
   // allora questi elementi semplicemente non ci sono. E' il segnale che
   // confirm_role_order() aspetta prima di agire: nessun drag ha senso
   // (nulla da trovare/cliccare) finche' questo non e' true.
-  const roleConfirmActive = document.querySelectorAll('[data-role-confirm-lane]').length > 0;
+  //
+  // Dal 2026-10-30 (trovato dal collaudo periodico, scripts/collaudo.py) il
+  // sito non usa piu' il trascinamento: le corsie sono gli elementi
+  // #{lato}-pick-role-{corsia}, anche loro presenti solo per il proprio lato e
+  // solo in questa fase. Vale l'uno o l'altro.
+  const roleConfirmActive =
+    document.querySelectorAll('[data-role-confirm-lane], [id$="-pick-role-top"]').length > 0;
 
   return {
     step: stepEl ? stepEl.textContent.trim() : null,
@@ -665,6 +675,34 @@ def _compute_role_moves(current: list[str], desired: list[str]) -> list[dict[str
             item = working.pop(at)
             working.insert(pos, item)
     return moves
+
+
+# Dal 2026-10-30 il sito ha tolto il trascinamento: "Roles are no longer
+# assigned with drag and drop. Click one of your champions, then click another
+# to swap their lanes" (testo del riquadro che compare dopo "Ready for role
+# confirmation"). Qui le mosse sono SCAMBI a coppia, non arrayMove: per ogni
+# posizione, se non ha il campione giusto, lo si scambia con dove sta. Al
+# massimo 4 scambi per 5 corsie.
+def _compute_role_swaps(current: list[str], desired: list[str]) -> list[dict[str, str]]:
+    working = list(current)
+    swaps: list[dict[str, str]] = []
+    for pos in range(5):
+        at = working.index(desired[pos])
+        if at != pos:
+            swaps.append({"from": _ROLE_CONFIRM_LANES[at], "to": _ROLE_CONFIRM_LANES[pos]})
+            working[pos], working[at] = working[at], working[pos]
+    return swaps
+
+
+def _dismiss_role_confirm_intro(page) -> None:
+    """Il riquadro "Role confirmation has changed" (dal 2026-10-30): compare
+    subito dopo il click su "Ready for role confirmation" e copre tutto
+    finche' non si preme "Got it, I'm ready" - con l'apostrofo tipografico,
+    da qui il punto qualunque nell'espressione. Tollerante: se non c'e', niente."""
+    try:
+        page.get_by_role("button", name=re.compile(r"Got it, I.m ready")).click(timeout=3000)
+    except Exception:
+        pass
 
 
 # Replica via eventi sintetici il drag validato manualmente (vedi note di
@@ -755,7 +793,10 @@ _ROLE_CONFIRM_STATE_JS = r"""
   const slugFor = (lane) => {
     // NON scoped su #{side}-picks-row - stesso bug/fix di _ROLE_DRAG_JS,
     // vedi li' per il dettaglio.
-    const el = document.querySelector(`[data-role-confirm-lane="${lane}"]`);
+    // Dal 2026-10-30 la corsia e' #{lato}-pick-role-{corsia} (vedi
+    // roleConfirmActive in _STATE_JS); il vecchio attributo resta per prima.
+    const el = document.querySelector(`[data-role-confirm-lane="${lane}"]`)
+      || document.getElementById(`${side}-pick-role-${lane}`);
     // Ogni corsia contiene DUE img - la prima e' l'iconcina SVG del ruolo
     // stesso (alt="Top"/"Jungle"/ecc, src /roleicons/*.svg, sempre presente
     // a prescindere dal campione), la SECONDA e' il vero ritratto/splash
@@ -771,8 +812,10 @@ _ROLE_CONFIRM_STATE_JS = r"""
     // Due percorsi: characters/<nome>/skins/... fino all'ottobre 2026,
     // game/splashes/<nome>.jpg dal rifacimento del sito (verificato il
     // 2026-10-16: "kaisa", "orianna", "thresh"...).
+    // Dal 2026-10-30 le immagini del sito possono avere anche il formato
+    // ridimensionato <nome>-<lato>.webp (vedi banId sopra): accettato pure qui.
     const m = src.match(/characters(?:%2F|\/)([a-z0-9]+)(?:%2F|\/)skins/)
-      || src.match(/splashes(?:%2F|\/)([a-z0-9]+)\.jpg/);
+      || src.match(/splashes(?:%2F|\/)([a-z0-9]+)(?:-\d+)?\.(?:jpg|webp)/);
     return m ? m[1] : null;
   };
   return ['top', 'jungle', 'mid', 'adc', 'support'].map(slugFor);
@@ -1358,7 +1401,14 @@ class LiveDraftSession:
                     # draft). I popup che doveva chiudere sono gia' gestiti
                     # dal watchdog di sottofondo e dal controllo "sul
                     # momento" prima di ogni click, senza bisogno di Escape.
+                    bottone = page.locator("#draft-button")
+                    per_i_ruoli = "role" in ((bottone.text_content() or "") if bottone.count() else "").lower()
                     page.click('#draft-button:has-text("Ready")', timeout=5000)
+                    # Il riquadro "Role confirmation has changed" compare solo
+                    # dopo "Ready for role confirmation" (dal 2026-10-30).
+                    if per_i_ruoli:
+                        page.wait_for_timeout(800)
+                        _dismiss_role_confirm_intro(page)
                     result_queue.put(("ok", None))
                 except Exception as e:
                     result_queue.put(("error", f"{e}"))
@@ -1415,12 +1465,17 @@ class LiveDraftSession:
                     # nessun campione veniva piu' trovato. Cercati entrambi;
                     # "champions/<id>.png" non confonde 45 con 145 perche'
                     # davanti all'ID c'e' sempre lo slash.
+                    # Dal 2026-10-30 anche game-sized/champions/<id>-128.webp
+                    # (trovato dal collaudo periodico): li' dopo l'ID c'e' il
+                    # trattino, che separa 23 da 238 come il punto prima.
                     if champion_id is not None:
                         tile_xpath = (
                             f'xpath=//img[contains(@src, "champion-icons/{champion_id}.png") '
                             f'or contains(@src, "champion-icons%2F{champion_id}.png") '
                             f'or contains(@src, "champions/{champion_id}.png") '
-                            f'or contains(@src, "champions%2F{champion_id}.png")]'
+                            f'or contains(@src, "champions%2F{champion_id}.png") '
+                            f'or contains(@src, "champions/{champion_id}-") '
+                            f'or contains(@src, "champions%2F{champion_id}-")]'
                             '/ancestor::div[contains(@class, "cursor-pointer")][1]'
                         )
                     else:
@@ -1530,9 +1585,31 @@ class LiveDraftSession:
                         ))
                         continue
 
-                    moves = _compute_role_moves(current_order, desired_order)
-
-                    results = page.evaluate(_ROLE_DRAG_JS, {"side": side, "moves": moves})
+                    # Il riquadro nuovo puo' essere ancora aperto se il Ready
+                    # e' stato cliccato a mano dalla finestra.
+                    _dismiss_role_confirm_intro(page)
+                    trascinamento = page.evaluate(
+                        "() => document.querySelectorAll('[data-role-confirm-lane]').length > 0"
+                    )
+                    if trascinamento:
+                        moves = _compute_role_moves(current_order, desired_order)
+                        results = page.evaluate(_ROLE_DRAG_JS, {"side": side, "moves": moves})
+                    else:
+                        # Dal 2026-10-30: un click su un campione, un click
+                        # sull'altro, e i due si scambiano la corsia. Click
+                        # veri di Playwright, non eventi sintetici: e' un
+                        # click normale, niente piu' sensori di trascinamento.
+                        moves = _compute_role_swaps(current_order, desired_order)
+                        results = []
+                        for mossa in moves:
+                            try:
+                                page.click(f"#{side}-pick-role-{mossa['from']}", timeout=4000)
+                                page.wait_for_timeout(300)
+                                page.click(f"#{side}-pick-role-{mossa['to']}", timeout=4000)
+                                page.wait_for_timeout(500)
+                                results.append({**mossa, "ok": True})
+                            except Exception:
+                                results.append({**mossa, "ok": False})
 
                     page.wait_for_timeout(300)
 

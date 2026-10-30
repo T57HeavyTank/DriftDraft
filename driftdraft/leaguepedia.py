@@ -32,7 +32,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from driftdraft.comps import COMP_REQUIREMENTS, MEMBER_THRESHOLD
 from driftdraft.data import load_champions, slugify_champion_name
@@ -996,7 +996,10 @@ def sync(total: int = DEFAULT_FETCH_TOTAL, on_progress=None) -> dict:
     sotto resta per chi non ne ha o le ha troppo vecchie."""
     esistenti = load_drafts()
     piu_recente = max((d for d in (_parse_date(x.date) for x in esistenti) if d), default=None)
-    if piu_recente and datetime.utcnow() - piu_recente <= timedelta(days=INCREMENTAL_MAX_GAP_DAYS):
+    # Le date di Leaguepedia sono UTC senza fuso: si confrontano con l'ora UTC
+    # senza fuso (utcnow() faceva lo stesso, ma Python lo sta togliendo).
+    adesso = datetime.now(timezone.utc).replace(tzinfo=None)
+    if piu_recente and adesso - piu_recente <= timedelta(days=INCREMENTAL_MAX_GAP_DAYS):
         return _sync_incremental(esistenti, piu_recente, total, on_progress)
 
     drafts = fetch_recent_drafts(total=total, on_progress=on_progress)
