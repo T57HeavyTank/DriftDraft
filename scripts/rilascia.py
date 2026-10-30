@@ -72,7 +72,9 @@ def git(*args: str, check: bool = True) -> str:
     r = subprocess.run(["git", *args], cwd=RADICE, capture_output=True, text=True, encoding="utf-8")
     if check and r.returncode != 0:
         raise Stop(f"git {' '.join(args)}: {r.stderr.strip() or r.stdout.strip()}")
-    return r.stdout.strip()
+    # rstrip e non strip: in "git status --porcelain" lo spazio iniziale fa
+    # parte della riga (" M file"), e toglierlo spostava il nome del file.
+    return r.stdout.rstrip()
 
 
 def gh(*args: str) -> str:
