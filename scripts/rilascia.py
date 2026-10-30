@@ -3,6 +3,7 @@
     python scripts/rilascia.py                   # collaudo, versione, build, prova, pubblicazione
     python scripts/rilascia.py --senza-pubblicare # tutto tranne push e release
     python scripts/rilascia.py --salta-collaudo   # se scripts/collaudo.py e' appena passato
+    python scripts/rilascia.py --solo-pubblicazione # pubblica cio' che --senza-pubblicare ha preparato
 
 Chiesto dall'utente il 2026-10-30: quando il collaudo periodico trova un sito
 cambiato e la correzione e' pronta, la versione nuova deve arrivare a chi usa
@@ -263,10 +264,29 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Rilascio di una nuova versione di DriftDraft")
     parser.add_argument("--senza-pubblicare", action="store_true", help="fa tutto tranne push e release")
     parser.add_argument("--salta-collaudo", action="store_true", help="non rilancia scripts/collaudo.py")
+    parser.add_argument(
+        "--solo-pubblicazione", action="store_true",
+        help="pubblica la versione gia' costruita e provata da un giro con --senza-pubblicare",
+    )
     args = parser.parse_args()
 
     fatto: list[str] = []
     try:
+        if args.solo_pubblicazione:
+            # Il secondo tempo di un rilascio fatto in due: la versione e'
+            # gia' in version.py, l'installer gia' in dist/, provato.
+            controlla_repository()
+            v = versione_attuale()
+            setup = RADICE / "dist" / f"DriftDraft-v{v}-setup.exe"
+            if not setup.exists():
+                raise Stop(f"non trovo {setup.name}: prima un giro con --senza-pubblicare")
+            if git("tag", "-l", f"v{v}") or git("ls-remote", "--tags", "origin", f"v{v}"):
+                raise Stop(f"il tag v{v} esiste gia': questa versione risulta gia' pubblicata")
+            fatto.append("pubblicato: " + pubblica(setup, v))
+            print("\n================ RILASCIO COMPLETATO ================")
+            for f in fatto:
+                print("-", f)
+            return 0
         dati_pro = controlla_repository()
         if not args.salta_collaudo:
             collaudo()
