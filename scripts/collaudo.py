@@ -254,10 +254,12 @@ def collaudo_siti(base: str) -> None:
         url = "https://op.gg/it/lol/multisearch/euw?summoners=" + quote(",".join(ids), safe=",")
         giocatori = opgg.fetch_team_pool(url, ids)
         # Un giocatore che op.gg stesso non trova nella ricerca multipla
-        # (successo il 2026-11-15: cercato da solo, la pagina risponde "la
-        # tua ricerca non ha restituito risultati", mentre il suo profilo
-        # singolo esiste) non e' un guasto di DriftDraft: e' un avviso. Resta
-        # un errore se invece la colonna c'e' e siamo noi a non abbinarla.
+        # (cercato da solo, la pagina risponde "la tua ricerca non ha
+        # restituito risultati": account rinominato o inesistente) non e' un
+        # guasto di DriftDraft: e' un avviso. Resta un errore se invece la
+        # colonna c'e' e siamo noi a non abbinarla. Il caso del 2026-11-15
+        # (nome scritto senza gli spazi interni) NON finisce piu' qui: lo
+        # recupera fetch_team_pool leggendo il nome vero dal profilo.
         mancanti = [i for i in ids if i not in {g.summoner for g in giocatori}]
         if giocatori and mancanti:
             from playwright.sync_api import sync_playwright

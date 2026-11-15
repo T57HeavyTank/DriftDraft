@@ -172,6 +172,53 @@ def fetch_team_pool(multisearch_url: str, requested_summoners: list[str]) -> lis
         page.goto(multisearch_url, wait_until="networkidle", timeout=30000)
         page.wait_for_timeout(1500)
         raw_cols = page.evaluate(_EXTRACT_JS)
+
+        # Dal novembre 2026 (trovato dal collaudo il 2026-11-15) la ricerca
+        # multipla vuole il nome ESATTO, spazi interni compresi: per
+        # "OffMetaKing#Tank" (account vero: "Off Meta King#Tank") la colonna
+        # non c'e' proprio, e la squadra tornava di 4 senza un perche'. A
+        # settembre il nome senza spazi bastava (vedi la nota sugli spazi piu'
+        # sotto). La pagina del PROFILO invece lo accetta ancora e porta il
+        # nome vero nel titolo: per i soli giocatori rimasti senza colonna si
+        # legge da li' e si ripete la ricerca multipla col nome corretto. Se
+        # tutti hanno la loro colonna (il caso normale) non costa nulla.
+        intestazioni = [_normalize_summoner(c["headerText"]) for c in raw_cols]
+        senza_colonna = [
+            s for s in requested_summoners
+            if "#" in s and not any(_normalize_summoner(s.split("#")[0]) in h for h in intestazioni)
+        ]
+        if senza_colonna:
+            regione = re.search(r"/multisearch/([a-z0-9]+)", multisearch_url)
+            corretti: dict[str, str] = {}
+            for s in senza_colonna:
+                nome, _, tag = s.partition("#")
+                try:
+                    page.goto(
+                        f"https://op.gg/it/lol/summoners/{regione.group(1) if regione else 'euw'}/"
+                        + quote(f"{nome.strip()}-{tag.strip()}"),
+                        wait_until="domcontentloaded", timeout=30000,
+                    )
+                    vero = page.title().split(" - ")[0].strip()
+                except Exception:
+                    continue  # profilo non raggiungibile: resta senza colonna, come prima
+                vero_nome, _, vero_tag = vero.partition("#")
+                # Solo se e' lo STESSO account scritto diversamente negli
+                # spazi: mai sostituire un nome con un altro.
+                if (
+                    vero_tag
+                    and vero != s
+                    and _normalize_summoner(vero_nome) == _normalize_summoner(nome)
+                    and _normalize_summoner(vero_tag) == _normalize_summoner(tag)
+                ):
+                    corretti[s] = vero
+            if corretti:
+                nomi = [corretti.get(s, s) for s in requested_summoners]
+                page.goto(
+                    multisearch_url.split("?")[0] + "?summoners=" + quote(",".join(nomi), safe=","),
+                    wait_until="networkidle", timeout=30000,
+                )
+                page.wait_for_timeout(1500)
+                raw_cols = page.evaluate(_EXTRACT_JS)
         browser.close()
 
     # nomi campioni validi conosciuti, per scartare eventuali righe rumorose
