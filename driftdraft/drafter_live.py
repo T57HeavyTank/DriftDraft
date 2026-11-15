@@ -546,7 +546,11 @@ _STATE_JS = r"""
     // dell'icona campione - richiedere alt="ban" (etichetta SOLO
     // dell'icona campione, verificata su tutti gli slot) la trova sempre
     // quella giusta, a prescindere da cos'altro c'e' nello slot.
-    const img = el.querySelector('img[alt="ban"]');
+    // Dal 2026-11-15 (collaudo periodico) il sito scrive alt="Ban" con la
+    // maiuscola: il selettore esatto non trovava piu' nulla e TUTTI i ban
+    // risultavano vuoti. La "i" finale lo rende indifferente a
+    // maiuscole/minuscole, cosi' vanno bene entrambe le forme.
+    const img = el.querySelector('img[alt="ban" i]');
     if (!img) return null;
     const src = img.currentSrc || img.src || '';
     // Due percorsi: champion-icons/<id>.png fino all'ottobre 2026,
@@ -698,7 +702,20 @@ def _dismiss_role_confirm_intro(page) -> None:
     """Il riquadro "Role confirmation has changed" (dal 2026-10-30): compare
     subito dopo il click su "Ready for role confirmation" e copre tutto
     finche' non si preme "Got it, I'm ready" - con l'apostrofo tipografico,
-    da qui il punto qualunque nell'espressione. Tollerante: se non c'e', niente."""
+    da qui il punto qualunque nell'espressione. Tollerante: se non c'e', niente.
+
+    Dal 2026-11-15 il popup "Draft complete - Save this draft for later"
+    compare in ritardo (dopo l'ultimo pick, non piu' subito) e finisce SOPRA
+    questo riquadro, coprendone il bottone: il click andava in timeout in
+    silenzio e il sito restava fermo su "Ready for role confirmation". Quindi
+    prima si chiude quello ("Not now"), se c'e'."""
+    try:
+        non_ora = page.locator('button:has-text("Not now")')
+        if non_ora.count() and non_ora.first.is_visible():
+            non_ora.first.click(timeout=1500)
+            page.wait_for_timeout(300)
+    except Exception:
+        pass
     try:
         page.get_by_role("button", name=re.compile(r"Got it, I.m ready")).click(timeout=3000)
     except Exception:
@@ -806,7 +823,11 @@ _ROLE_CONFIRM_STATE_JS = r"""
     // un'icona SVG che non ha nulla a che vedere col campione - da qui
     // "sempre null", non un caso limite. Selettore esplicito invece di
     // "la seconda trovata", piu' resistente a un eventuale ordine diverso.
-    const img = el ? el.querySelector('img[alt="pick"]') : null;
+    // Dal 2026-11-15 il sito scrive alt="Pick" con la maiuscola (come
+    // alt="Ban", vedi banId): con il selettore esatto l'ordine delle corsie
+    // tornava tutto vuoto e la conferma ruoli si rifiutava di partire. La
+    // "i" finale accetta entrambe le forme.
+    const img = el ? el.querySelector('img[alt="pick" i]') : null;
     if (!img) return null;
     const src = img.currentSrc || img.src || '';
     // Due percorsi: characters/<nome>/skins/... fino all'ottobre 2026,
@@ -1385,9 +1406,17 @@ class LiveDraftSession:
                 # gia' finita per il sito (e gia' mostrando il popup).
                 if not _dismissed_draft_complete_popup:
                     if "role confirmation" in (state.get("step") or "").lower():
-                        _dismissed_draft_complete_popup = True
+                        # Dal 2026-11-15 il popup non c'e' ancora al primo
+                        # tick di "Role confirmation": arriva qualche istante
+                        # dopo. Il tentativo unico lo mancava sempre e il
+                        # popup restava aperto. Ora si GUARDA se il bottone e'
+                        # visibile (nessuna attesa: costa una query) e il flag
+                        # scatta solo quando il click e' riuscito davvero.
                         try:
-                            page.click('button:has-text("Not now")', timeout=800)
+                            non_ora = page.locator('button:has-text("Not now")')
+                            if non_ora.count() and non_ora.first.is_visible():
+                                non_ora.first.click(timeout=800)
+                                _dismissed_draft_complete_popup = True
                         except Exception:
                             pass
 

@@ -253,6 +253,31 @@ def collaudo_siti(base: str) -> None:
         ids = titolari()
         url = "https://op.gg/it/lol/multisearch/euw?summoners=" + quote(",".join(ids), safe=",")
         giocatori = opgg.fetch_team_pool(url, ids)
+        # Un giocatore che op.gg stesso non trova nella ricerca multipla
+        # (successo il 2026-11-15: cercato da solo, la pagina risponde "la
+        # tua ricerca non ha restituito risultati", mentre il suo profilo
+        # singolo esiste) non e' un guasto di DriftDraft: e' un avviso. Resta
+        # un errore se invece la colonna c'e' e siamo noi a non abbinarla.
+        mancanti = [i for i in ids if i not in {g.summoner for g in giocatori}]
+        if giocatori and mancanti:
+            from playwright.sync_api import sync_playwright
+
+            with sync_playwright() as p:
+                browser = p.chromium.launch(args=["--disable-blink-features=AutomationControlled"])
+                page = browser.new_context(viewport={"width": 1440, "height": 900}, user_agent=opgg._USER_AGENT).new_page()
+                colonne = 0
+                for m in mancanti:
+                    page.goto("https://op.gg/it/lol/multisearch/euw?summoners=" + quote(m, safe=","), wait_until="networkidle", timeout=30000)
+                    page.wait_for_timeout(1500)
+                    colonne += len(page.evaluate(opgg._EXTRACT_JS))
+                browser.close()
+            if colonne == 0:
+                verifica(all(g.champions for g in giocatori), "qualche giocatore senza campioni")
+                verifica(any(g.roles for g in giocatori), "nessuna corsia riconosciuta (icone cambiate?)")
+                raise Avviso(
+                    f"op.gg non trova {', '.join(mancanti)} nella ricerca multipla (nome cambiato?): "
+                    f"letti gli altri {len(giocatori)}/{len(ids)}"
+                )
         verifica(len(giocatori) == len(ids), f"colonne abbinate {len(giocatori)}/{len(ids)}")
         verifica(all(g.champions for g in giocatori), "qualche giocatore senza campioni")
         verifica(any(g.roles for g in giocatori), "nessuna corsia riconosciuta (icone cambiate?)")
@@ -449,6 +474,10 @@ def collaudo_drafter() -> None:
                         pronto_ruoli_blu = True
                     elif st.get("roleConfirmActive") and "confirm roles" in testo.lower() and not ruoli_blu:
                         r = sessione.confirm_role_order(ordine_ruoli)
+                        # Senza questa riga un rifiuto della conferma ruoli
+                        # passava inosservato: senza "dragResults" il controllo
+                        # sotto e' vero a vuoto (successo il 2026-11-15).
+                        verifica(not r.get("error"), f"conferma ruoli: {r.get('error')}")
                         verifica(all(d.get("ok") for d in r.get("dragResults", [])), f"trascinamento ruoli: {r}")
                         ruoli_blu = True
                     if ruoli_blu and any(st.get("blueRoleTags") or []):
